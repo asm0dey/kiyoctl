@@ -90,7 +90,12 @@ pub struct Ui {
     device_name: String,
     vid: u16,
     pid: u16,
-    has_razer: bool,
+    /// The attached camera's Model, if kiyoctl has one for it.
+    // ponytail: no reader yet — rendering must stay byte-identical for this
+    // task, so nothing consumes this field within it. Drop this allow once a
+    // header/help display reads it.
+    #[allow(dead_code)]
+    model_name: Option<String>,
     profile_name: String,
     rows: Vec<Row>,
     list: ListState,
@@ -557,7 +562,7 @@ impl App {
             device_name: cam.name.clone(),
             vid: cam.vid,
             pid: cam.pid,
-            has_razer: cam.has_razer_unit(),
+            model_name: cam.model_name().map(str::to_string),
             profile_name: profile_name.to_string(),
             rows: Vec::new(),
             list: ListState::default().with_selected(Some(0)),
@@ -576,19 +581,17 @@ impl App {
     /// Re-read every control the camera actually implements.
     fn reload(&mut self) -> Result<(), String> {
         let mut rows = Vec::new();
-        for ctrl in controls::STANDARD {
+        for ctrl in self.cam.controls() {
             if ctrl.is_opaque() {
                 // Write-only: the best we can show is what the profile recalls.
-                if self.cam.has_razer_unit() {
-                    rows.push(Row {
-                        ctrl,
-                        value: self.profile.get(ctrl.name),
-                        range: None,
-                        step: 1,
-                        default: None,
-                        writable: true,
-                    });
-                }
+                rows.push(Row {
+                    ctrl,
+                    value: self.profile.get(ctrl.name),
+                    range: None,
+                    step: 1,
+                    default: None,
+                    writable: true,
+                });
                 continue;
             }
             if let Some(r) = controls::read(&self.cam, ctrl)? {
@@ -935,7 +938,7 @@ fn render(frame: &mut Frame, ui: &mut Ui) {
         })
         .collect();
 
-    let razer_note = if ui.has_razer {
+    let opaque_note = if ui.rows.iter().any(|r| r.ctrl.is_opaque()) {
         " (magenta = write-only, remembered by kiyoctl) "
     } else {
         " "
@@ -944,7 +947,7 @@ fn render(frame: &mut Frame, ui: &mut Ui) {
         List::new(items).block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(format!(" controls{razer_note}")),
+                .title(format!(" controls{opaque_note}")),
         ),
         body,
         &mut ui.list,
@@ -1217,7 +1220,7 @@ mod tests {
             device_name: "Razer Kiyo Pro".into(),
             vid: 0x1532,
             pid: 0x0e05,
-            has_razer: true,
+            model_name: Some("Razer Kiyo Pro".into()),
             profile_name: "default".into(),
             rows: vec![
                 row("brightness", Some("129"), Some((0, 255)), 1),

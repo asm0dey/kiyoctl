@@ -11,10 +11,6 @@ use crate::usb::Unit;
 
 pub struct Model {
     /// Shown in the TUI header, in `list`, and as a `list-controls` heading.
-    // ponytail: `Cam::model_name` (Task 6) reads this field, but nothing calls
-    // `Cam::model_name` from production code yet — Task 9 wires that up. Drop
-    // this allow then.
-    #[allow(dead_code)]
     pub name: &'static str,
     /// The vid:pid pairs this Model covers. Required, non-empty. This is the
     /// only thing matching looks at — see ADR 0002.

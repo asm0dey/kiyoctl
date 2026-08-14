@@ -181,10 +181,10 @@ pub fn apply(cam: &Cam, profile: &Profile) -> ApplyReport {
 
     let mut touched_extension = false;
     for (ctrl, value) in &planned {
-        if ctrl.is_opaque() && !cam.has_razer_unit() {
+        if cam.find(ctrl.name).is_none() {
             report
                 .skipped
-                .push((ctrl.name.into(), "camera has no Razer extension unit".into()));
+                .push((ctrl.name.into(), "not available on this camera".into()));
             continue;
         }
 

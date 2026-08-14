@@ -315,14 +315,6 @@ impl Cam {
         })
     }
 
-    // ponytail: transitional. "Does this camera have vendor controls" is now
-    // "does it have a Model"; the last callers go in Tasks 8-9, which delete
-    // this method. Keeping it here is a smaller diff than rewriting six call
-    // sites those tasks are about to rewrite anyway.
-    pub fn has_razer_unit(&self) -> bool {
-        self.model.is_some()
-    }
-
     /// The controls this camera has: standard UVC plus its Model's, if any.
     pub fn controls(&self) -> Vec<&'static crate::controls::Control> {
         crate::controls::effective_controls(self.model)
@@ -334,9 +326,6 @@ impl Cam {
     }
 
     /// The Model's name, for user-facing text.
-    // ponytail: no production caller until Task 9 wires up the TUI header.
-    // Drop this allow then.
-    #[allow(dead_code)]
     pub fn model_name(&self) -> Option<&'static str> {
         self.model.map(|m| m.name)
     }
