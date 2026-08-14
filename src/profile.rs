@@ -110,10 +110,13 @@ impl Profile {
     /// camera keeps everything flat. See ADR 0003.
     pub fn migrate(&mut self) {
         let Some(camera) = self.camera.clone() else { return };
-        let Some(model) = parse_key(&camera).and_then(|(vid, pid)| models::for_camera(vid, pid))
-        else {
-            return;
-        };
+        let Some((vid, pid)) = parse_key(&camera) else { return };
+        let Some(model) = models::for_camera(vid, pid) else { return };
+        // Normalise before use: `parse_key` accepts uppercase hex, but the
+        // section key and `self.camera` must match `Profile::key`'s lowercase
+        // form, or `values_for`/`get`/`foreign_to` miss what this just wrote.
+        let camera = Profile::key(vid, pid);
+        self.camera = Some(camera.clone());
         let moving: Vec<String> = self
             .controls
             .keys()
@@ -453,6 +456,28 @@ mod tests {
         let p = Profile::from_json(OLD_FORMAT).unwrap();
         assert_eq!(p.per_camera["1532:0e05"]["hdr"], "on", "parsing must migrate, not just deserialise");
         assert!(!p.controls.contains_key("hdr"));
+    }
+
+    /// A 0.2.0 profile can record uppercase hex (`Profile::key` only ever
+    /// emits lowercase, but `parse_key` accepts either). Migration must key
+    /// the section with the same lowercase form `values_for` looks up, or the
+    /// value becomes unreadable through the normal path.
+    #[test]
+    fn migration_normalises_an_uppercase_recorded_camera() {
+        let mut p: Profile = serde_json::from_str(
+            r#"{
+                "device": "1532:0E05",
+                "controls": { "hdr": "on" }
+            }"#,
+        )
+        .unwrap();
+        p.migrate();
+        assert_eq!(p.camera.as_deref(), Some("1532:0e05"), "self.camera must be normalised too");
+        assert_eq!(
+            p.values_for(0x1532, 0x0e05).get("hdr").unwrap(),
+            "on",
+            "hdr must be readable through values_for with the lowercase key"
+        );
     }
 
     #[test]

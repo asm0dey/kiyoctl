@@ -67,7 +67,7 @@ A camera implementation is a const, not a trait.
 // src/models/mod.rs
 
 pub struct Model {
-    /// Shown in the TUI header, in `list`, and as a `list-controls` heading.
+    /// Shown in the TUI header, in `list`, and as a `controls` heading.
     pub name: &'static str,
     /// The vid:pid pairs this Model covers. Required, non-empty. This is the
     /// only thing matching looks at — see ADR 0002.
@@ -191,7 +191,7 @@ count of extension units no Model claims.
 | --- | --- | --- |
 | `controls::STANDARD` | the shared UVC catalogue, unchanged | the two below |
 | `cam.controls()` | `STANDARD` plus the attached Model's | TUI, `show`, `capture`, `apply` |
-| `controls::every()` | `STANDARD` plus every registered Model's | `list-controls`, unknown-control errors |
+| `controls::every()` | `STANDARD` plus every registered Model's | `controls`, unknown-control errors |
 
 `controls::find` splits the same way: `cam.find(name)` for camera-bound
 operations, `controls::find_any(name)` for name validation with no camera open.
@@ -308,10 +308,10 @@ the camera in front of you and leaving the browse-view snapshots untouched.
 | Command | Now | After |
 | --- | --- | --- |
 | `list` | `[Razer extension unit]` | `[Razer Kiyo Pro]` |
-| `list-controls` | `-- Razer Kiyo Pro only, and write-only --` | `-- Razer Kiyo Pro --`, one group per Model |
+| `controls` | `-- Razer Kiyo Pro only, and write-only --` | `-- Razer Kiyo Pro --`, one group per Model |
 | `show` | `Note: HDR and other Razer settings…` | same, Model name substituted |
 
-`list-controls` keeps printing every Model's controls in full. Shrinking it to a
+`controls` keeps printing every Model's controls in full. Shrinking it to a
 one-line index was considered and rejected under ADR 0004: with one Model it is
 strictly worse for every user who exists today.
 

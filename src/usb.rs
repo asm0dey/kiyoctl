@@ -410,7 +410,7 @@ impl Cam {
         if self.unit_id(unit).is_none() {
             return None;
         }
-        self.get(unit, selector, GET_INFO, 1).ok().map(|b| b[0])
+        self.get(unit, selector, GET_INFO, 1).ok().and_then(|b| b.first().copied())
     }
 
     /// Ask the camera to keep its extension-unit state across a power cycle.

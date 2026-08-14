@@ -19,7 +19,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 #[command(
     name = "kiyoctl",
     version,
-    about = "Control UVC webcam settings (including Razer Kiyo Pro HDR) and restore them automatically"
+    about = "Control UVC webcam settings, including vendor extensions, and restore them automatically"
 )]
 struct Cli {
     /// Which camera: "vvvv:pppp" or part of its product name
@@ -225,10 +225,16 @@ fn cmd_list() -> Result<(), String> {
         return Ok(());
     }
     for f in &found {
-        let extra = match models::for_camera(f.vid, f.pid) {
-            Some(m) => format!("  [{}]", m.name),
-            None if !f.extension_guids.is_empty() => "  [unrecognised extension unit]".to_string(),
-            None => String::new(),
+        let model = models::for_camera(f.vid, f.pid);
+        let n = usb::unclaimed(model, &f.extension_guids).len();
+        let unrecognised = (n > 0).then(|| {
+            format!("{n} unrecognised extension unit{}", if n == 1 { "" } else { "s" })
+        });
+        let extra = match (model, unrecognised) {
+            (Some(m), Some(u)) => format!("  [{}, {u}]", m.name),
+            (Some(m), None) => format!("  [{}]", m.name),
+            (None, Some(u)) => format!("  [{u}]"),
+            (None, None) => String::new(),
         };
         println!(
             "{}  {:04x}:{:04x}  bus {} addr {}{}",
@@ -408,8 +414,9 @@ fn cmd_save(dev: Option<&str>, profile_name: &str) -> Result<(), String> {
     // Check before `capture` re-homes the profile: afterwards this can only
     // ever return None, since `capture` stamps the new identity itself.
     if let Some(from) = prof.foreign_to(cam.vid, cam.pid) {
+        let was = prof.name.as_deref().unwrap_or("another camera");
         eprintln!(
-            "this profile was last saved from {from}; re-homing it to {} ({:04x}:{:04x}) — {from}'s settings stay in their own section, not lost",
+            "this profile was last saved from {was} ({from}); re-homing it to {} ({:04x}:{:04x}) — {was}'s settings stay in their own section, not lost",
             cam.name, cam.vid, cam.pid
         );
     }
@@ -426,9 +433,15 @@ fn cmd_save(dev: Option<&str>, profile_name: &str) -> Result<(), String> {
             .map(|c| c.name)
             .collect();
         if tracked.is_empty() {
+            let example = model
+                .controls
+                .iter()
+                .find(|c| c.is_opaque())
+                .and_then(|c| c.choices()?.last().map(|v| format!("{} {}", c.name, v)))
+                .unwrap_or_else(|| "a control on and back off".to_string());
             println!(
                 "Note: {} settings cannot be read back. Set them once with \
-                 `kiyoctl set hdr on` and they will be remembered from then on.",
+                 `kiyoctl set {example}` and they will be remembered from then on.",
                 model.name
             );
         } else {

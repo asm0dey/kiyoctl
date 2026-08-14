@@ -48,6 +48,9 @@ static CONTROLS: &[Control] = &[
         name: "my_control",
         unit: UNIT,
         selector: SET_SELECTOR,
+        // `len` is used by the read path only. `Kind::Opaque` writes
+        // `payload` as-is, whatever its length, and never reads — this value
+        // is unused here but still required by the struct.
         len: 1,
         kind: Kind::Opaque(MY_CONTROL),
         help: "what a user should understand this to do",
@@ -59,7 +62,8 @@ static CONTROLS: &[Control] = &[
     },
 ];
 
-pub static MODEL: Model = Model {
+/// A `const` rather than a `static` so `MODELS` can embed it by value.
+pub const MODEL: Model = Model {
     name: "Vendor Model Name",
     // Required, non-empty. Matching is by vid:pid only — GUIDs collide
     // across vendors. See docs/adr/0002-match-models-by-usb-id.md.

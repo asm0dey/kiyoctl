@@ -69,6 +69,12 @@ Watch for three things the template calls out:
 - **`Kind::Opaque` is for controls that cannot be read back**, not for
   controls that live on an extension unit. If yours answers `GET_CUR`, use
   `Int`, `Bool` or `Menu` and the ordinary read path works unmodified.
+- **A Model's controls must live on an extension unit.** The registry
+  self-check rejects `Unit::Camera` or `Unit::Processing` on a Model control.
+  If your camera exposes a standard-but-uncatalogued UVC control (pan/tilt
+  absolute, roll, privacy), that belongs in `controls::STANDARD` instead —
+  a different kind of contribution, since standard selectors are not vendor
+  knowledge.
 
 ## Step 4: Check it
 

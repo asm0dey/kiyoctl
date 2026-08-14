@@ -1,7 +1,9 @@
 //! The catalogue of controls kiyoctl knows how to read and write.
 //!
 //! Standard UVC controls live on the camera terminal or processing unit and are
-//! readable. A Model's extension-unit controls are write-only — the camera
+//! readable. A Model's extension-unit controls may or may not be readable:
+//! some cameras answer GET_CUR on their own selectors just like a standard
+//! control does. `Kind::Opaque` marks the ones that do not — the camera
 //! accepts them but never reports them back — so their state is tracked in the
 //! saved profile rather than queried from hardware. They live in `src/models/`.
 
