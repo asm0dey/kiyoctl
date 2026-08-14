@@ -4,6 +4,8 @@
 //! payloads, and add one line to `MODELS`. See `docs/adding-a-camera.md` —
 //! and do not guess payload bytes.
 
+// One line per camera. `_template.rs` is deliberately absent: it is a file to
+// copy, not to compile.
 pub mod razer_kiyo_pro;
 
 use crate::controls::Control;

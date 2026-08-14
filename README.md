@@ -1,14 +1,15 @@
 # kiyoctl
 
-Command-line and terminal-UI control of the **Razer Kiyo Pro** on macOS, with
-saved profiles that are reapplied at login and whenever the camera is
-reconnected. HDR, HDR mode, field of view and autofocus responsiveness come from
-Razer's vendor extension unit; brightness, white balance, exposure, focus and
-zoom are standard UVC.
+Command-line and terminal-UI control of UVC webcams on macOS, with saved
+profiles that are reapplied at login and whenever the camera is reconnected.
+Brightness, white balance, exposure, focus and zoom are standard UVC and work
+on any camera — macOS gives you no way to touch those otherwise.
 
-Other webcams work too, for the standard UVC controls — macOS gives you no way
-to touch those otherwise. Only the Kiyo Pro's extension unit is decoded, so
-another vendor's custom settings are not exposed.
+Vendor-specific settings live behind a camera's extension unit and differ by
+manufacturer. kiyoctl ships support for the **Razer Kiyo Pro** (HDR, HDR mode,
+field of view, autofocus responsiveness). Other cameras can be added by writing
+one file — see [docs/adding-a-camera.md](docs/adding-a-camera.md). If yours has
+an extension unit kiyoctl does not recognise, `kiyoctl show` will say so.
 
 ## How it works
 
@@ -96,6 +97,7 @@ status line says what to change to unlock it.
 kiyoctl list                    # attached cameras
 kiyoctl show                    # every control your camera supports, with values
 kiyoctl controls                # what each control means and accepts
+kiyoctl probe                   # read-only dump of a camera's extension units
 
 kiyoctl get brightness
 kiyoctl set brightness 140
@@ -274,6 +276,15 @@ layout and the interaction logic are tested without a webcam —
 kiyoctl --device 1532:0e05 show
 kiyoctl --device kiyo set hdr on
 ```
+
+## Adding a camera
+
+Only the Razer Kiyo Pro's extension unit is decoded today. Support for another
+camera is one file away — see
+[docs/adding-a-camera.md](docs/adding-a-camera.md), which covers finding real
+payload bytes and the format kiyoctl expects. `kiyoctl probe` is the starting
+point: it dumps what a camera's extension units will admit to without writing
+anything.
 
 ## Credit
 
