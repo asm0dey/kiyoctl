@@ -117,9 +117,6 @@ pub fn find_any(name: &str) -> Option<&'static Control> {
 
 /// True when this name belongs to a Model rather than the standard catalogue.
 /// Used by profile migration to decide what moves into a per-camera section.
-// ponytail: read only by tests until Task 10 wires up profile migration.
-// Drop this allow then.
-#[allow(dead_code)]
 pub fn is_model_control(name: &str) -> bool {
     MODELS.iter().any(|m| m.controls.iter().any(|c| c.name == name))
 }

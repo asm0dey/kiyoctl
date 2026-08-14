@@ -551,7 +551,11 @@ pub struct App {
 
 impl App {
     pub fn new(cam: Cam, profile_name: &str) -> Result<App, String> {
-        let profile = Profile::load_or_default(profile_name)?;
+        let mut profile = Profile::load_or_default(profile_name)?;
+        // The session edits this profile against the camera in front of us, so
+        // an opaque value lands in that camera's section and not the one the
+        // file happens to name.
+        profile.home_to(&cam);
         let ui = Ui {
             device_name: cam.name.clone(),
             vid: cam.vid,
@@ -660,6 +664,7 @@ impl App {
             Ok(prof) => {
                 let report = profile::apply(&self.cam, &prof);
                 self.profile = prof;
+                self.profile.home_to(&self.cam);
                 self.refresh_values();
                 // Reflect remembered extension-unit values back into the list.
                 for row in &mut self.ui.rows {

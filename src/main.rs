@@ -342,6 +342,11 @@ fn cmd_set(dev: Option<&str>, profile_name: &str, args: &[String], no_remember: 
     let pairs = parse_assignments(args)?;
     let cam = Cam::open(dev)?;
     let mut prof = if no_remember { Profile::default() } else { Profile::load_or_default(profile_name)? };
+    if !no_remember {
+        // Identity first: `set` uses it to route a Model control into this
+        // camera's section.
+        prof.home_to(&cam);
+    }
 
     let mut touched_extension = false;
     for (name, value) in &pairs {
@@ -362,8 +367,6 @@ fn cmd_set(dev: Option<&str>, profile_name: &str, args: &[String], no_remember: 
     }
 
     if !no_remember {
-        prof.device = Some(format!("{:04x}:{:04x}", cam.vid, cam.pid));
-        prof.name = Some(cam.name.clone());
         prof.save(profile_name)?;
     }
     Ok(())
@@ -377,10 +380,12 @@ fn cmd_save(dev: Option<&str>, profile_name: &str) -> Result<(), String> {
     let path = prof.save(profile_name)?;
     println!("Saved {} settings from {} to {}", captured.len(), cam.name, path.display());
     if let Some(model) = cam.model {
+        // Opaque values now live in this camera's section, not the flat map.
+        let stored = prof.values_for(cam.vid, cam.pid);
         let tracked: Vec<&str> = model
             .controls
             .iter()
-            .filter(|c| c.is_opaque() && prof.controls.contains_key(c.name))
+            .filter(|c| c.is_opaque() && stored.contains_key(c.name))
             .map(|c| c.name)
             .collect();
         if tracked.is_empty() {
@@ -419,15 +424,17 @@ fn cmd_profiles() -> Result<(), String> {
     let active = profile::active();
     for name in names {
         let prof = Profile::load(&name)?;
-        let device = prof.name.clone().unwrap_or_else(|| "unknown camera".into());
+        let camera = prof.name.clone().unwrap_or_else(|| "unknown camera".into());
         let mark = if name == active { " * in use" } else { "" };
-        println!("{name}  ({device}, {} settings){mark}", prof.controls.len());
+        let extra: usize = prof.per_camera.values().map(|s| s.len()).sum();
+        println!("{name}  ({camera}, {} settings){mark}", prof.controls.len() + extra);
         for (k, v) in &prof.controls {
-            let rendered = match v {
-                serde_json::Value::String(s) => s.clone(),
-                other => other.to_string(),
-            };
-            println!("    {k} = {rendered}");
+            println!("    {k} = {}", profile::render(v));
+        }
+        for (cam_key, section) in &prof.per_camera {
+            for (k, v) in section {
+                println!("    {k} = {} [{cam_key}]", profile::render(v));
+            }
         }
     }
     Ok(())
