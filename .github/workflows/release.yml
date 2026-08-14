@@ -28,3 +28,27 @@ jobs:
         run: gh release create "$GITHUB_REF_NAME" --generate-notes kiyoctl-*.tar.gz
         env:
           GH_TOKEN: ${{ github.token }}
+
+      # Skipped until TAP_TOKEN exists: a PAT with contents:write on
+      # asm0dey/homebrew-tap. github.token cannot write to another repo.
+      - name: Point the Homebrew formula at this release
+        if: ${{ secrets.TAP_TOKEN != '' }}
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: |
+          sha=$(shasum -a 256 kiyoctl-*.tar.gz | cut -d' ' -f1)
+          version=${GITHUB_REF_NAME#v}
+          url=https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/kiyoctl-${GITHUB_REF_NAME}-macos-universal.tar.gz
+
+          git clone --depth 1 \
+            "https://x-access-token:${TAP_TOKEN}@github.com/asm0dey/homebrew-tap.git" tap
+          cd tap
+          sed -i '' \
+            -e "s|^  url .*|  url \"${url}\"|" \
+            -e "s|^  sha256 .*|  sha256 \"${sha}\"|" \
+            Formula/kiyoctl.rb
+          git diff --quiet && exit 0
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -am "kiyoctl ${version}"
+          git push

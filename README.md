@@ -226,16 +226,24 @@ work around the same bug on Linux.
 
 ## Installing
 
-Grab the universal binary from
-[Releases](https://github.com/asm0dey/kiyoctl/releases), or build it yourself:
+```sh
+brew install asm0dey/tap/kiyoctl
+kiyoctl install            # optional: login agent that reapplies your profile
+```
+
+Or take the universal binary straight from
+[Releases](https://github.com/asm0dey/kiyoctl/releases):
 
 ```sh
 tar xzf kiyoctl-v0.1.0-macos-universal.tar.gz
-./kiyoctl install          # copies to ~/.local/bin and sets up the login agent
+xattr -d com.apple.quarantine kiyoctl    # it is not notarized
+./kiyoctl install
 ```
 
-It is unsigned, so the first run needs a right-click → Open, or
-`xattr -d com.apple.quarantine kiyoctl`.
+`kiyoctl install` copies the binary it is running to `~/.local/bin/kiyoctl` and
+points the launchd agent at that copy, so a `brew upgrade` moving the Cellar
+path underneath it cannot break the agent. Re-run it after an upgrade to refresh
+that copy.
 
 ## Building and testing
 
