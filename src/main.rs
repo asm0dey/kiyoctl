@@ -2,13 +2,14 @@
 //! back after a reboot or a replug.
 
 mod controls;
+mod models;
 mod profile;
 mod service;
 mod tui;
 mod usb;
 
 use clap::{Parser, Subcommand};
-use controls::CONTROLS;
+use controls::STANDARD;
 use usb::Cam;
 use profile::Profile;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -231,9 +232,9 @@ fn cmd_list() -> Result<(), String> {
 }
 
 fn cmd_controls() -> Result<(), String> {
-    let width = CONTROLS.iter().map(|c| c.name.len()).max().unwrap_or(0);
+    let width = STANDARD.iter().map(|c| c.name.len()).max().unwrap_or(0);
     let mut last_razer = false;
-    for (i, ctrl) in CONTROLS.iter().enumerate() {
+    for (i, ctrl) in STANDARD.iter().enumerate() {
         if ctrl.is_opaque() && !last_razer {
             println!("\n  -- Razer Kiyo Pro only, and write-only --");
         }
@@ -243,7 +244,7 @@ fn cmd_controls() -> Result<(), String> {
             None => "a number (range depends on the camera)".to_string(),
         };
         println!("  {:<width$}  {}\n  {:<width$}  values: {values}", ctrl.name, ctrl.help, "");
-        if i + 1 < CONTROLS.len() {
+        if i + 1 < STANDARD.len() {
             println!();
         }
     }
@@ -256,7 +257,7 @@ fn cmd_show(dev: Option<&str>) -> Result<(), String> {
     println!("{} ({:04x}:{:04x})\n", cam.name, cam.vid, cam.pid);
 
     let mut rows: Vec<(String, String, String)> = Vec::new();
-    for ctrl in CONTROLS {
+    for ctrl in STANDARD {
         if ctrl.is_opaque() {
             continue;
         }
@@ -298,7 +299,7 @@ fn cmd_show(dev: Option<&str>) -> Result<(), String> {
 
     if cam.has_razer_unit() {
         println!("\nRazer extension unit (write-only — the camera does not report these back):");
-        for ctrl in CONTROLS.iter().filter(|c| c.is_opaque()) {
+        for ctrl in STANDARD.iter().filter(|c| c.is_opaque()) {
             let choices = ctrl.choices().unwrap_or_default().join("|");
             println!("  {:<width$}  {:>vwidth$}   {choices}", ctrl.name, "?");
         }
@@ -344,7 +345,9 @@ fn cmd_set(dev: Option<&str>, profile_name: &str, args: &[String], no_remember: 
 
     // Ask the camera to keep extension-unit settings in its own storage.
     if touched_razer {
-        let _ = cam.set(usb::Unit::Razer, 0x01, controls::RAZER_SAVE);
+        if let Some((unit, selector, payload)) = cam.model.and_then(|m| m.persist) {
+            let _ = cam.set(unit, selector, payload);
+        }
     }
 
     if !no_remember {
@@ -363,7 +366,7 @@ fn cmd_save(dev: Option<&str>, profile_name: &str) -> Result<(), String> {
     let path = prof.save(profile_name)?;
     println!("Saved {} settings from {} to {}", captured.len(), cam.name, path.display());
     if cam.has_razer_unit() {
-        let tracked: Vec<&str> = CONTROLS
+        let tracked: Vec<&str> = STANDARD
             .iter()
             .filter(|c| c.is_opaque() && prof.controls.contains_key(c.name))
             .map(|c| c.name)
@@ -446,7 +449,7 @@ fn cmd_use(dev: Option<&str>, name: &str) -> Result<(), String> {
 fn cmd_reset(dev: Option<&str>) -> Result<(), String> {
     let cam = Cam::open(dev)?;
     let mut n = 0;
-    for ctrl in CONTROLS {
+    for ctrl in STANDARD {
         if ctrl.is_opaque() {
             continue;
         }
@@ -602,7 +605,7 @@ fn parse_assignments(args: &[String]) -> Result<Vec<(String, String)>, String> {
 }
 
 fn unknown_control(name: &str) -> String {
-    let known: Vec<&str> = CONTROLS.iter().map(|c| c.name).collect();
+    let known: Vec<&str> = STANDARD.iter().map(|c| c.name).collect();
     format!("unknown control '{name}'. Known controls: {}", known.join(", "))
 }
 

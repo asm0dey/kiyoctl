@@ -1,9 +1,9 @@
 //! The catalogue of controls kiyoctl knows how to read and write.
 //!
 //! Standard UVC controls live on the camera terminal or processing unit and are
-//! readable. Razer's extension-unit controls are write-only — the camera
+//! readable. A Model's extension-unit controls are write-only — the camera
 //! accepts them but never reports them back — so their state is tracked in the
-//! saved profile rather than queried from hardware.
+//! saved profile rather than queried from hardware. They live in `src/models/`.
 
 use crate::usb::{Cam, Unit, GET_CUR, GET_DEF, GET_MAX, GET_MIN, GET_RES, INFO_GET, INFO_SET};
 
@@ -39,41 +39,6 @@ pub struct Control {
     pub requires: Option<(&'static str, &'static [&'static str])>,
 }
 
-/// Razer EU1 control selectors.
-const EU1_SET_ISP: u8 = 0x01;
-
-/// Persist the extension-unit state into the camera's own storage.
-pub const RAZER_SAVE: &[u8] = &[0xc0, 0x03, 0xa8, 0x00, 0x00, 0x00, 0x00, 0x00];
-
-const HDR: &[OpaqueOpt] = &[
-    OpaqueOpt { name: "off", payload: &[0xff, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], pre: None },
-    OpaqueOpt { name: "on",  payload: &[0xff, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00], pre: None },
-];
-
-const HDR_MODE: &[OpaqueOpt] = &[
-    OpaqueOpt { name: "dark",   payload: &[0xff, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], pre: None },
-    OpaqueOpt { name: "bright", payload: &[0xff, 0x07, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00], pre: None },
-];
-
-const FOV: &[OpaqueOpt] = &[
-    OpaqueOpt { name: "wide", payload: &[0xff, 0x01, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00], pre: None },
-    OpaqueOpt {
-        name: "medium",
-        payload: &[0xff, 0x01, 0x01, 0x03, 0x01, 0x00, 0x00, 0x00],
-        pre: Some(&[0xff, 0x01, 0x00, 0x03, 0x01, 0x00, 0x00, 0x00]),
-    },
-    OpaqueOpt {
-        name: "narrow",
-        payload: &[0xff, 0x01, 0x01, 0x03, 0x02, 0x00, 0x00, 0x00],
-        pre: Some(&[0xff, 0x01, 0x00, 0x03, 0x02, 0x00, 0x00, 0x00]),
-    },
-];
-
-const AF_MODE: &[OpaqueOpt] = &[
-    OpaqueOpt { name: "responsive", payload: &[0xff, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], pre: None },
-    OpaqueOpt { name: "passive",    payload: &[0xff, 0x06, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00], pre: None },
-];
-
 const POWER_LINE: &[(&str, i64)] =
     &[("disabled", 0), ("50hz", 1), ("60hz", 2), ("auto", 3)];
 
@@ -85,7 +50,7 @@ const AE_MODE: &[(&str, i64)] = &[
     ("aperture_priority", 8),
 ];
 
-pub static CONTROLS: &[Control] = &[
+pub static STANDARD: &[Control] = &[
     // --- Processing unit -------------------------------------------------
     Control { name: "brightness", unit: Unit::Processing, selector: 0x02, len: 2,
         kind: Kind::Int { signed: true }, help: "image brightness", order: 1, requires: None },
@@ -124,20 +89,10 @@ pub static CONTROLS: &[Control] = &[
         requires: Some(("focus_auto", &["off"])) },
     Control { name: "zoom", unit: Unit::Camera, selector: 0x0b, len: 2,
         kind: Kind::Int { signed: false }, help: "optical zoom", order: 1, requires: None },
-
-    // --- Razer extension unit (write-only) -------------------------------
-    Control { name: "hdr", unit: Unit::Razer, selector: EU1_SET_ISP, len: 8,
-        kind: Kind::Opaque(HDR), help: "high dynamic range", order: 2, requires: None },
-    Control { name: "hdr_mode", unit: Unit::Razer, selector: EU1_SET_ISP, len: 8,
-        kind: Kind::Opaque(HDR_MODE), help: "HDR tone preference", order: 2, requires: None },
-    Control { name: "fov", unit: Unit::Razer, selector: EU1_SET_ISP, len: 8,
-        kind: Kind::Opaque(FOV), help: "field of view", order: 2, requires: None },
-    Control { name: "af_mode", unit: Unit::Razer, selector: EU1_SET_ISP, len: 8,
-        kind: Kind::Opaque(AF_MODE), help: "autofocus responsiveness", order: 2, requires: None },
 ];
 
 pub fn find(name: &str) -> Option<&'static Control> {
-    CONTROLS.iter().find(|c| c.name == name)
+    STANDARD.iter().find(|c| c.name == name)
 }
 
 impl Control {
@@ -187,7 +142,7 @@ pub struct Reading {
 }
 
 /// Read a control from the camera. Returns Ok(None) when the camera does not
-/// implement it, or when it is write-only (the Razer unit).
+/// implement it, or when it is write-only (an extension unit).
 pub fn read(cam: &Cam, ctrl: &Control) -> Result<Option<Reading>, String> {
     if ctrl.is_opaque() {
         return Ok(None);

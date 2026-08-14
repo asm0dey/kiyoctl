@@ -136,7 +136,7 @@ fn render(v: &Json) -> String {
 /// extension-unit entries as they were (the camera cannot report those).
 pub fn capture(cam: &Cam, profile: &mut Profile) -> Vec<String> {
     let mut captured = Vec::new();
-    for ctrl in controls::CONTROLS {
+    for ctrl in controls::STANDARD {
         if ctrl.is_opaque() {
             continue;
         }
@@ -220,7 +220,9 @@ pub fn apply(cam: &Cam, profile: &Profile) -> ApplyReport {
     // Persist extension-unit state into the camera's own storage so it survives
     // a power cycle even without kiyoctl running.
     if touched_razer {
-        let _ = cam.set(crate::usb::Unit::Razer, 0x01, controls::RAZER_SAVE);
+        if let Some((unit, selector, payload)) = cam.model.and_then(|m| m.persist) {
+            let _ = cam.set(unit, selector, payload);
+        }
     }
 
     report

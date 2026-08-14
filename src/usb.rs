@@ -27,11 +27,6 @@ const VC_PROCESSING_UNIT: u8 = 0x05;
 const VC_EXTENSION_UNIT: u8 = 0x06;
 const ITT_CAMERA: u16 = 0x0201;
 
-/// Razer's ISP extension unit, GUID 23e49ed0-1178-4f31-ae52-d2fb8a8d3b48.
-pub const RAZER_EU1_GUID: [u8; 16] = [
-    0xd0, 0x9e, 0xe4, 0x23, 0x78, 0x11, 0x31, 0x4f, 0xae, 0x52, 0xd2, 0xfb, 0x8a, 0x8d, 0x3b, 0x48,
-];
-
 const TIMEOUT: Duration = Duration::from_millis(1000);
 
 /// Which logical unit inside the camera a control lives on.
@@ -41,8 +36,20 @@ pub enum Unit {
     Camera,
     /// Processing unit: image pipeline — brightness, white balance, gain.
     Processing,
-    /// Razer ISP extension unit: HDR, field of view, AF tuning.
-    Razer,
+    /// A vendor extension unit, addressed by its GUID. A camera may carry
+    /// several; a Model's controls may name more than one.
+    Extension(&'static [u8; 16]),
+}
+
+impl Unit {
+    /// For error messages. `Debug` on an Extension would print sixteen bytes.
+    pub fn label(&self) -> String {
+        match self {
+            Unit::Camera => "camera terminal".to_string(),
+            Unit::Processing => "processing unit".to_string(),
+            Unit::Extension(g) => format!("extension unit {}", format_guid(g)),
+        }
+    }
 }
 
 /// Shown when the camera is enumerated but will not answer control requests.
@@ -62,6 +69,8 @@ pub struct Cam {
     camera_id: Option<u8>,
     processing_id: Option<u8>,
     extension_units: Vec<([u8; 16], u8)>,
+    /// The Model covering this camera, if any. Selected by vid:pid.
+    pub model: Option<&'static crate::models::Model>,
 }
 
 /// What a scan found: enough to identify a camera without opening it.
@@ -146,9 +155,6 @@ fn parse_units(dev: &Device<GlobalContext>) -> Option<Interface> {
 
 /// Render a descriptor GUID the way vendors publish it. The first three fields
 /// are stored little-endian in the descriptor; the last two are not.
-// ponytail: not called from production code yet — a later task in this refactor
-// wires it into vendor lookup / display. Remove this allow once that lands.
-#[allow(dead_code)]
 pub fn format_guid(b: &[u8; 16]) -> String {
     format!(
         "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{}",
@@ -209,6 +215,19 @@ pub fn scan() -> rusb::Result<Vec<Found>> {
         });
     }
     Ok(out)
+}
+
+/// Resolve a Unit to the unit id to put in wIndex. Pure, so the "absent GUID
+/// must not fall back to another unit" case is testable without hardware.
+fn find_unit(present: &[([u8; 16], u8)], unit: Unit) -> Option<u8> {
+    match unit {
+        Unit::Extension(guid) => present
+            .iter()
+            .find(|(g, _)| g == guid)
+            .map(|(_, id)| *id),
+        // The fixed units are fields on Cam, not entries in this list.
+        Unit::Camera | Unit::Processing => None,
+    }
 }
 
 impl Cam {
@@ -289,11 +308,16 @@ impl Cam {
             camera_id: iface.units.camera_id,
             processing_id: iface.units.processing_id,
             extension_units: iface.units.extensions,
+            model: crate::models::for_camera(desc.vendor_id(), desc.product_id()),
         })
     }
 
+    // ponytail: transitional. "Does this camera have vendor controls" is now
+    // "does it have a Model"; the last callers go in Tasks 8-9, which delete
+    // this method. Keeping it here is a smaller diff than rewriting six call
+    // sites those tasks are about to rewrite anyway.
     pub fn has_razer_unit(&self) -> bool {
-        self.extension_units.iter().any(|(g, _)| *g == RAZER_EU1_GUID)
+        self.model.is_some()
     }
 
     /// Replace a low-level transfer error with something actionable when the
@@ -310,11 +334,7 @@ impl Cam {
         match unit {
             Unit::Camera => self.camera_id,
             Unit::Processing => self.processing_id,
-            Unit::Razer => self
-                .extension_units
-                .iter()
-                .find(|(g, _)| *g == RAZER_EU1_GUID)
-                .map(|(_, id)| *id),
+            Unit::Extension(_) => find_unit(&self.extension_units, unit),
         }
     }
 
@@ -327,7 +347,7 @@ impl Cam {
     pub fn get(&self, unit: Unit, selector: u8, request: u8, len: usize) -> Result<Vec<u8>, String> {
         let unit_id = self
             .unit_id(unit)
-            .ok_or_else(|| format!("{unit:?} unit not present on this camera"))?;
+            .ok_or_else(|| format!("{} not present on this camera", unit.label()))?;
         let mut buf = vec![0u8; len];
         let n = self
             .handle
@@ -341,7 +361,7 @@ impl Cam {
     pub fn set(&self, unit: Unit, selector: u8, data: &[u8]) -> Result<(), String> {
         let unit_id = self
             .unit_id(unit)
-            .ok_or_else(|| format!("{unit:?} unit not present on this camera"))?;
+            .ok_or_else(|| format!("{} not present on this camera", unit.label()))?;
         if std::env::var_os("CAMCTL_DEBUG").is_some() {
             eprintln!("SET_CUR {unit:?} sel={selector:#04x} data={data:02x?}");
         }
@@ -377,7 +397,7 @@ mod tests {
         v.extend_from_slice(&[4, CS_INTERFACE, VC_PROCESSING_UNIT, 2]);
         // Extension unit, id 3, Razer's GUID
         let mut eu = vec![20, CS_INTERFACE, VC_EXTENSION_UNIT, 3];
-        eu.extend_from_slice(&RAZER_EU1_GUID);
+        eu.extend_from_slice(&crate::models::razer_kiyo_pro::EU1_GUID);
         v.extend_from_slice(&eu);
         // Extension unit, id 4, some other GUID
         let mut eu2 = vec![20, CS_INTERFACE, VC_EXTENSION_UNIT, 4];
@@ -392,7 +412,7 @@ mod tests {
         assert_eq!(p.camera_id, Some(1), "streaming terminal must not win");
         assert_eq!(p.processing_id, Some(2));
         assert_eq!(p.extensions.len(), 2, "both extension units must be returned");
-        assert_eq!(p.extensions[0], (RAZER_EU1_GUID, 3));
+        assert_eq!(p.extensions[0], (crate::models::razer_kiyo_pro::EU1_GUID, 3));
         assert_eq!(p.extensions[1], ([0xaa; 16], 4));
     }
 
@@ -412,9 +432,23 @@ mod tests {
     }
 
     #[test]
+    fn a_control_on_an_absent_unit_resolves_to_no_unit_id() {
+        let present = [(crate::models::razer_kiyo_pro::EU1_GUID, 3u8)];
+        assert_eq!(
+            find_unit(&present, Unit::Extension(&crate::models::razer_kiyo_pro::EU1_GUID)),
+            Some(3)
+        );
+        assert_eq!(
+            find_unit(&present, Unit::Extension(&[0xaa; 16])),
+            None,
+            "an absent GUID must not fall back to unit zero or to another unit"
+        );
+    }
+
+    #[test]
     fn guid_renders_in_canonical_form() {
         assert_eq!(
-            format_guid(&RAZER_EU1_GUID),
+            format_guid(&crate::models::razer_kiyo_pro::EU1_GUID),
             "23e49ed0-1178-4f31-ae52-d2fb8a8d3b48",
             "first three fields are little-endian in the descriptor"
         );

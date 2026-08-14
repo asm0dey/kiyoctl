@@ -576,7 +576,7 @@ impl App {
     /// Re-read every control the camera actually implements.
     fn reload(&mut self) -> Result<(), String> {
         let mut rows = Vec::new();
-        for ctrl in controls::CONTROLS {
+        for ctrl in controls::STANDARD {
             if ctrl.is_opaque() {
                 // Write-only: the best we can show is what the profile recalls.
                 if self.cam.has_razer_unit() {
@@ -629,7 +629,9 @@ impl App {
             Ok(()) => {
                 if ctrl.is_opaque() {
                     // Ask the camera to keep this across a power cycle.
-                    let _ = self.cam.set(crate::usb::Unit::Razer, 0x01, controls::RAZER_SAVE);
+                    if let Some((unit, selector, payload)) = self.cam.model.and_then(|m| m.persist) {
+                        let _ = self.cam.set(unit, selector, payload);
+                    }
                     self.ui.rows[index].value = Some(value.clone());
                 } else {
                     self.refresh_values();
