@@ -14,7 +14,7 @@ Existing Profiles keep applying their Model control values, via the load-time
 migration in ADR 0003. Without it every existing user's HDR and field-of-view
 settings would have stopped applying, and they would have found out weeks later.
 
-`list-controls` keeps printing every Model's controls in full. An earlier
+`controls` keeps printing every Model's controls in full. An earlier
 decision to shrink it to a one-line index would have been strictly worse for
 every user who exists today, in exchange for a scaling problem that starts at
 four registry entries.

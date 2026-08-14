@@ -102,7 +102,7 @@ pub fn effective_controls(model: Option<&'static Model>) -> Vec<&'static Control
 }
 
 /// Every control kiyoctl knows about, across every registered Model. For
-/// `list-controls` and for telling "not on this camera" from "no such control".
+/// `controls` and for telling "not on this camera" from "no such control".
 pub fn every() -> Vec<&'static Control> {
     STANDARD
         .iter()

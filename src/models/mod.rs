@@ -1,8 +1,8 @@
 //! The registry of cameras kiyoctl knows vendor-specific facts about.
 //!
 //! Adding a camera: copy `razer_kiyo_pro.rs`, change the ids, GUIDs and
-//! payloads, and add one line to `MODELS`. See `docs/adding-a-camera.md` —
-//! and do not guess payload bytes.
+//! payloads, then add both a `pub mod` declaration below and an entry in
+//! `MODELS`. See `docs/adding-a-camera.md` — and do not guess payload bytes.
 
 // One line per camera. `_template.rs` is deliberately absent: it is a file to
 // copy, not to compile.
@@ -12,7 +12,7 @@ use crate::controls::Control;
 use crate::usb::Unit;
 
 pub struct Model {
-    /// Shown in the TUI header, in `list`, and as a `list-controls` heading.
+    /// Shown in the TUI header, in `list`, and as a `controls` heading.
     pub name: &'static str,
     /// The vid:pid pairs this Model covers. Required, non-empty. This is the
     /// only thing matching looks at — see ADR 0002.

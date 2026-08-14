@@ -56,7 +56,8 @@ In rough order of effort:
 ## Step 3: Write the file
 
 Copy `src/models/_template.rs` to `src/models/<your_camera>.rs`, fill it in,
-and add one line to `MODELS` in `src/models/mod.rs`.
+and register it in `src/models/mod.rs`: a `pub mod <your_camera>;`
+declaration, plus your Model in the `MODELS` array.
 
 Watch for three things the template calls out:
 
