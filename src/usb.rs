@@ -14,6 +14,7 @@ pub const GET_MAX: u8 = 0x83;
 pub const GET_RES: u8 = 0x84;
 pub const GET_DEF: u8 = 0x87;
 pub const GET_INFO: u8 = 0x86;
+pub const GET_LEN: u8 = 0x85;
 
 /// GET_INFO capability bits.
 pub const INFO_GET: u8 = 0x01;
@@ -313,6 +314,11 @@ impl Cam {
             extension_units: iface.units.extensions,
             model: crate::models::for_camera(desc.vendor_id(), desc.product_id()),
         })
+    }
+
+    /// Every extension unit GUID this camera carries, in descriptor order.
+    pub fn extension_unit_guids(&self) -> Vec<[u8; 16]> {
+        self.extension_units.iter().map(|(g, _)| *g).collect()
     }
 
     /// The controls this camera has: standard UVC plus its Model's, if any.

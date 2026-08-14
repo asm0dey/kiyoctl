@@ -3,6 +3,7 @@
 
 mod controls;
 mod models;
+mod probe;
 mod profile;
 mod service;
 mod tui;
@@ -43,6 +44,8 @@ enum Cmd {
     List,
     /// Describe every control kiyoctl understands, and its accepted values
     Controls,
+    /// Report what is behind a camera's vendor extension units (read-only)
+    Probe,
     /// Show every control the camera supports, with its current value
     Show,
     /// Print one control's current value
@@ -125,6 +128,7 @@ fn run(cli: &Cli) -> Result<(), String> {
         Cmd::Tui => tui::run(Cam::open(dev)?, &in_use),
         Cmd::List => cmd_list(),
         Cmd::Controls => cmd_controls(),
+        Cmd::Probe => cmd_probe(dev),
         Cmd::Show => cmd_show(dev),
         Cmd::Get { control } => cmd_get(dev, control),
         Cmd::Set { assignments, no_remember } => cmd_set(dev, &in_use, assignments, *no_remember),
@@ -256,6 +260,13 @@ fn cmd_controls() -> Result<(), String> {
         }
     }
     println!("Not every camera implements every control; `kiyoctl show` lists what yours does.");
+    Ok(())
+}
+
+fn cmd_probe(dev: Option<&str>) -> Result<(), String> {
+    let cam = Cam::open(dev)?;
+    println!("{} ({:04x}:{:04x})\n", cam.name, cam.vid, cam.pid);
+    print!("{}", probe::run(&cam));
     Ok(())
 }
 
