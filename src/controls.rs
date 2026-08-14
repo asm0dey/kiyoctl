@@ -7,13 +7,13 @@
 
 use crate::usb::{Cam, Unit, GET_CUR, GET_DEF, GET_MAX, GET_MIN, GET_RES, INFO_GET, INFO_SET};
 
-/// A single option of a Razer extension-unit control.
-pub struct RazerOpt {
+/// A single named payload of an opaque control.
+pub struct OpaqueOpt {
     pub name: &'static str,
-    /// Payload written to EU1_SET_ISP.
-    pub payload: [u8; 8],
+    /// Payload written to the control's selector.
+    pub payload: &'static [u8],
     /// Some options need a priming write first (the field-of-view ones do).
-    pub pre: Option<[u8; 8]>,
+    pub pre: Option<&'static [u8]>,
 }
 
 pub enum Kind {
@@ -21,8 +21,9 @@ pub enum Kind {
     Bool,
     /// Named values over a small integer domain.
     Menu(&'static [(&'static str, i64)]),
-    /// Razer extension unit: opaque payloads, no read-back.
-    Razer(&'static [RazerOpt]),
+    /// Write-only named byte payloads, with no read-back. Independent of which
+    /// unit the control lives on — see CONTEXT.md.
+    Opaque(&'static [OpaqueOpt]),
 }
 
 pub struct Control {
@@ -42,35 +43,35 @@ pub struct Control {
 const EU1_SET_ISP: u8 = 0x01;
 
 /// Persist the extension-unit state into the camera's own storage.
-pub const RAZER_SAVE: [u8; 8] = [0xc0, 0x03, 0xa8, 0x00, 0x00, 0x00, 0x00, 0x00];
+pub const RAZER_SAVE: &[u8] = &[0xc0, 0x03, 0xa8, 0x00, 0x00, 0x00, 0x00, 0x00];
 
-const HDR: &[RazerOpt] = &[
-    RazerOpt { name: "off", payload: [0xff, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], pre: None },
-    RazerOpt { name: "on",  payload: [0xff, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00], pre: None },
+const HDR: &[OpaqueOpt] = &[
+    OpaqueOpt { name: "off", payload: &[0xff, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], pre: None },
+    OpaqueOpt { name: "on",  payload: &[0xff, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00], pre: None },
 ];
 
-const HDR_MODE: &[RazerOpt] = &[
-    RazerOpt { name: "dark",   payload: [0xff, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], pre: None },
-    RazerOpt { name: "bright", payload: [0xff, 0x07, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00], pre: None },
+const HDR_MODE: &[OpaqueOpt] = &[
+    OpaqueOpt { name: "dark",   payload: &[0xff, 0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], pre: None },
+    OpaqueOpt { name: "bright", payload: &[0xff, 0x07, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00], pre: None },
 ];
 
-const FOV: &[RazerOpt] = &[
-    RazerOpt { name: "wide", payload: [0xff, 0x01, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00], pre: None },
-    RazerOpt {
+const FOV: &[OpaqueOpt] = &[
+    OpaqueOpt { name: "wide", payload: &[0xff, 0x01, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00], pre: None },
+    OpaqueOpt {
         name: "medium",
-        payload: [0xff, 0x01, 0x01, 0x03, 0x01, 0x00, 0x00, 0x00],
-        pre: Some([0xff, 0x01, 0x00, 0x03, 0x01, 0x00, 0x00, 0x00]),
+        payload: &[0xff, 0x01, 0x01, 0x03, 0x01, 0x00, 0x00, 0x00],
+        pre: Some(&[0xff, 0x01, 0x00, 0x03, 0x01, 0x00, 0x00, 0x00]),
     },
-    RazerOpt {
+    OpaqueOpt {
         name: "narrow",
-        payload: [0xff, 0x01, 0x01, 0x03, 0x02, 0x00, 0x00, 0x00],
-        pre: Some([0xff, 0x01, 0x00, 0x03, 0x02, 0x00, 0x00, 0x00]),
+        payload: &[0xff, 0x01, 0x01, 0x03, 0x02, 0x00, 0x00, 0x00],
+        pre: Some(&[0xff, 0x01, 0x00, 0x03, 0x02, 0x00, 0x00, 0x00]),
     },
 ];
 
-const AF_MODE: &[RazerOpt] = &[
-    RazerOpt { name: "responsive", payload: [0xff, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], pre: None },
-    RazerOpt { name: "passive",    payload: [0xff, 0x06, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00], pre: None },
+const AF_MODE: &[OpaqueOpt] = &[
+    OpaqueOpt { name: "responsive", payload: &[0xff, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00], pre: None },
+    OpaqueOpt { name: "passive",    payload: &[0xff, 0x06, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00], pre: None },
 ];
 
 const POWER_LINE: &[(&str, i64)] =
@@ -126,13 +127,13 @@ pub static CONTROLS: &[Control] = &[
 
     // --- Razer extension unit (write-only) -------------------------------
     Control { name: "hdr", unit: Unit::Razer, selector: EU1_SET_ISP, len: 8,
-        kind: Kind::Razer(HDR), help: "high dynamic range", order: 2, requires: None },
+        kind: Kind::Opaque(HDR), help: "high dynamic range", order: 2, requires: None },
     Control { name: "hdr_mode", unit: Unit::Razer, selector: EU1_SET_ISP, len: 8,
-        kind: Kind::Razer(HDR_MODE), help: "HDR tone preference", order: 2, requires: None },
+        kind: Kind::Opaque(HDR_MODE), help: "HDR tone preference", order: 2, requires: None },
     Control { name: "fov", unit: Unit::Razer, selector: EU1_SET_ISP, len: 8,
-        kind: Kind::Razer(FOV), help: "field of view", order: 2, requires: None },
+        kind: Kind::Opaque(FOV), help: "field of view", order: 2, requires: None },
     Control { name: "af_mode", unit: Unit::Razer, selector: EU1_SET_ISP, len: 8,
-        kind: Kind::Razer(AF_MODE), help: "autofocus responsiveness", order: 2, requires: None },
+        kind: Kind::Opaque(AF_MODE), help: "autofocus responsiveness", order: 2, requires: None },
 ];
 
 pub fn find(name: &str) -> Option<&'static Control> {
@@ -140,8 +141,8 @@ pub fn find(name: &str) -> Option<&'static Control> {
 }
 
 impl Control {
-    pub fn is_razer(&self) -> bool {
-        matches!(self.kind, Kind::Razer(_))
+    pub fn is_opaque(&self) -> bool {
+        matches!(self.kind, Kind::Opaque(_))
     }
 
     /// Legal values, for help text and error messages.
@@ -149,7 +150,7 @@ impl Control {
         match &self.kind {
             Kind::Bool => Some(vec!["off", "on"]),
             Kind::Menu(m) => Some(m.iter().map(|(n, _)| *n).collect()),
-            Kind::Razer(o) => Some(o.iter().map(|o| o.name).collect()),
+            Kind::Opaque(o) => Some(o.iter().map(|o| o.name).collect()),
             Kind::Int { .. } => None,
         }
     }
@@ -188,7 +189,7 @@ pub struct Reading {
 /// Read a control from the camera. Returns Ok(None) when the camera does not
 /// implement it, or when it is write-only (the Razer unit).
 pub fn read(cam: &Cam, ctrl: &Control) -> Result<Option<Reading>, String> {
-    if ctrl.is_razer() {
+    if ctrl.is_opaque() {
         return Ok(None);
     }
     let Some(info) = cam.info(ctrl.unit, ctrl.selector) else {
@@ -239,15 +240,15 @@ pub fn read(cam: &Cam, ctrl: &Control) -> Result<Option<Reading>, String> {
 pub fn write(cam: &Cam, ctrl: &Control, value: &str) -> Result<(), String> {
     let v = value.trim().to_lowercase();
     match &ctrl.kind {
-        Kind::Razer(opts) => {
+        Kind::Opaque(opts) => {
             let opt = opts
                 .iter()
                 .find(|o| o.name == v)
                 .ok_or_else(|| bad_value(ctrl, value))?;
-            if let Some(pre) = &opt.pre {
+            if let Some(pre) = opt.pre {
                 cam.set(ctrl.unit, ctrl.selector, pre)?;
             }
-            cam.set(ctrl.unit, ctrl.selector, &opt.payload)
+            cam.set(ctrl.unit, ctrl.selector, opt.payload)
         }
         Kind::Bool => {
             let raw = match v.as_str() {
@@ -286,5 +287,36 @@ fn bad_value(ctrl: &Control, value: &str) -> String {
     match ctrl.choices() {
         Some(c) => format!("invalid value '{value}' for {}; expected one of: {}", ctrl.name, c.join(", ")),
         None => format!("invalid value '{value}' for {}; expected a number", ctrl.name),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn opaque_controls_report_their_option_names() {
+        let hdr = find("hdr").expect("hdr must exist");
+        assert!(hdr.is_opaque());
+        assert_eq!(hdr.choices(), Some(vec!["off", "on"]));
+    }
+
+    #[test]
+    fn standard_controls_are_not_opaque() {
+        assert!(!find("brightness").unwrap().is_opaque());
+        assert!(!find("auto_exposure").unwrap().is_opaque());
+    }
+
+    #[test]
+    fn payloads_are_not_fixed_at_eight_bytes() {
+        // The type must accept a payload of any length, so a vendor using
+        // variable-length buffers can contribute without editing this file.
+        const WIDE: &[OpaqueOpt] = &[OpaqueOpt {
+            name: "wide",
+            payload: &[0x01, 0x02, 0x03],
+            pre: Some(&[0x00; 12]),
+        }];
+        assert_eq!(WIDE[0].payload.len(), 3);
+        assert_eq!(WIDE[0].pre.unwrap().len(), 12);
     }
 }

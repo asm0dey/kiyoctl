@@ -234,10 +234,10 @@ fn cmd_controls() -> Result<(), String> {
     let width = CONTROLS.iter().map(|c| c.name.len()).max().unwrap_or(0);
     let mut last_razer = false;
     for (i, ctrl) in CONTROLS.iter().enumerate() {
-        if ctrl.is_razer() && !last_razer {
+        if ctrl.is_opaque() && !last_razer {
             println!("\n  -- Razer Kiyo Pro only, and write-only --");
         }
-        last_razer = ctrl.is_razer();
+        last_razer = ctrl.is_opaque();
         let values = match ctrl.choices() {
             Some(c) => c.join(" | "),
             None => "a number (range depends on the camera)".to_string(),
@@ -257,7 +257,7 @@ fn cmd_show(dev: Option<&str>) -> Result<(), String> {
 
     let mut rows: Vec<(String, String, String)> = Vec::new();
     for ctrl in CONTROLS {
-        if ctrl.is_razer() {
+        if ctrl.is_opaque() {
             continue;
         }
         if let Some(r) = controls::read(&cam, ctrl)? {
@@ -298,7 +298,7 @@ fn cmd_show(dev: Option<&str>) -> Result<(), String> {
 
     if cam.has_razer_unit() {
         println!("\nRazer extension unit (write-only — the camera does not report these back):");
-        for ctrl in CONTROLS.iter().filter(|c| c.is_razer()) {
+        for ctrl in CONTROLS.iter().filter(|c| c.is_opaque()) {
             let choices = ctrl.choices().unwrap_or_default().join("|");
             println!("  {:<width$}  {:>vwidth$}   {choices}", ctrl.name, "?");
         }
@@ -308,7 +308,7 @@ fn cmd_show(dev: Option<&str>) -> Result<(), String> {
 
 fn cmd_get(dev: Option<&str>, name: &str) -> Result<(), String> {
     let ctrl = controls::find(name).ok_or_else(|| unknown_control(name))?;
-    if ctrl.is_razer() {
+    if ctrl.is_opaque() {
         return Err(format!(
             "{name} is write-only; the camera cannot report it. Its last value is in the profile — see `kiyoctl profiles`."
         ));
@@ -331,11 +331,11 @@ fn cmd_set(dev: Option<&str>, profile_name: &str, args: &[String], no_remember: 
     let mut touched_razer = false;
     for (name, value) in &pairs {
         let ctrl = controls::find(name).ok_or_else(|| unknown_control(name))?;
-        if ctrl.is_razer() && !cam.has_razer_unit() {
+        if ctrl.is_opaque() && !cam.has_razer_unit() {
             return Err(format!("{} has no Razer extension unit, so {name} is unavailable", cam.name));
         }
         controls::write(&cam, ctrl, value).map_err(|e| cam.explain(e))?;
-        touched_razer |= ctrl.is_razer();
+        touched_razer |= ctrl.is_opaque();
         println!("{name} = {value}");
         if !no_remember {
             prof.set(name, value);
@@ -344,7 +344,7 @@ fn cmd_set(dev: Option<&str>, profile_name: &str, args: &[String], no_remember: 
 
     // Ask the camera to keep extension-unit settings in its own storage.
     if touched_razer {
-        let _ = cam.set(usb::Unit::Razer, 0x01, &controls::RAZER_SAVE);
+        let _ = cam.set(usb::Unit::Razer, 0x01, controls::RAZER_SAVE);
     }
 
     if !no_remember {
@@ -365,7 +365,7 @@ fn cmd_save(dev: Option<&str>, profile_name: &str) -> Result<(), String> {
     if cam.has_razer_unit() {
         let tracked: Vec<&str> = CONTROLS
             .iter()
-            .filter(|c| c.is_razer() && prof.controls.contains_key(c.name))
+            .filter(|c| c.is_opaque() && prof.controls.contains_key(c.name))
             .map(|c| c.name)
             .collect();
         if tracked.is_empty() {
@@ -447,7 +447,7 @@ fn cmd_reset(dev: Option<&str>) -> Result<(), String> {
     let cam = Cam::open(dev)?;
     let mut n = 0;
     for ctrl in CONTROLS {
-        if ctrl.is_razer() {
+        if ctrl.is_opaque() {
             continue;
         }
         if let Ok(Some(r)) = controls::read(&cam, ctrl) {

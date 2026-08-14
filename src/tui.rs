@@ -577,7 +577,7 @@ impl App {
     fn reload(&mut self) -> Result<(), String> {
         let mut rows = Vec::new();
         for ctrl in controls::CONTROLS {
-            if ctrl.is_razer() {
+            if ctrl.is_opaque() {
                 // Write-only: the best we can show is what the profile recalls.
                 if self.cam.has_razer_unit() {
                     rows.push(Row {
@@ -603,7 +603,7 @@ impl App {
             }
         }
         // Refuse to open a UI onto a camera that answers nothing.
-        if !rows.iter().any(|r| !r.ctrl.is_razer()) && !self.cam.responding {
+        if !rows.iter().any(|r| !r.ctrl.is_opaque()) && !self.cam.responding {
             return Err(crate::usb::NOT_RESPONDING.into());
         }
         self.ui.rows = rows;
@@ -613,7 +613,7 @@ impl App {
     /// Refresh the readable controls, since one control can move another.
     fn refresh_values(&mut self) {
         for row in &mut self.ui.rows {
-            if row.ctrl.is_razer() {
+            if row.ctrl.is_opaque() {
                 continue;
             }
             if let Ok(Some(r)) = controls::read(&self.cam, row.ctrl) {
@@ -627,9 +627,9 @@ impl App {
         let ctrl = self.ui.rows[index].ctrl;
         match controls::write(&self.cam, ctrl, &value) {
             Ok(()) => {
-                if ctrl.is_razer() {
+                if ctrl.is_opaque() {
                     // Ask the camera to keep this across a power cycle.
-                    let _ = self.cam.set(crate::usb::Unit::Razer, 0x01, &controls::RAZER_SAVE);
+                    let _ = self.cam.set(crate::usb::Unit::Razer, 0x01, controls::RAZER_SAVE);
                     self.ui.rows[index].value = Some(value.clone());
                 } else {
                     self.refresh_values();
@@ -665,7 +665,7 @@ impl App {
                 self.refresh_values();
                 // Reflect remembered extension-unit values back into the list.
                 for row in &mut self.ui.rows {
-                    if row.ctrl.is_razer() {
+                    if row.ctrl.is_opaque() {
                         if let Some(v) = self.profile.get(row.ctrl.name) {
                             row.value = Some(v);
                         }
@@ -733,7 +733,7 @@ impl App {
     fn reset_defaults(&mut self) {
         let mut n = 0;
         for i in 0..self.ui.rows.len() {
-            if self.ui.rows[i].ctrl.is_razer() || !self.ui.rows[i].writable {
+            if self.ui.rows[i].ctrl.is_opaque() || !self.ui.rows[i].writable {
                 continue;
             }
             if let Some(d) = self.ui.rows[i].default.clone() {
@@ -861,7 +861,7 @@ fn render(frame: &mut Frame, ui: &mut Ui) {
 
             let name_style = if !row.writable || blocked {
                 Style::default().fg(Color::DarkGray)
-            } else if row.ctrl.is_razer() {
+            } else if row.ctrl.is_opaque() {
                 Style::default().fg(Color::Magenta)
             } else {
                 Style::default()

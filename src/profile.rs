@@ -137,7 +137,7 @@ fn render(v: &Json) -> String {
 pub fn capture(cam: &Cam, profile: &mut Profile) -> Vec<String> {
     let mut captured = Vec::new();
     for ctrl in controls::CONTROLS {
-        if ctrl.is_razer() {
+        if ctrl.is_opaque() {
             continue;
         }
         if let Ok(Some(reading)) = controls::read(cam, ctrl) {
@@ -181,7 +181,7 @@ pub fn apply(cam: &Cam, profile: &Profile) -> ApplyReport {
 
     let mut touched_razer = false;
     for (ctrl, value) in &planned {
-        if ctrl.is_razer() && !cam.has_razer_unit() {
+        if ctrl.is_opaque() && !cam.has_razer_unit() {
             report
                 .skipped
                 .push((ctrl.name.into(), "camera has no Razer extension unit".into()));
@@ -209,7 +209,7 @@ pub fn apply(cam: &Cam, profile: &Profile) -> ApplyReport {
         match controls::write(cam, ctrl, value) {
             Ok(()) => {
                 report.applied.push(format!("{} = {}", ctrl.name, value));
-                if ctrl.is_razer() {
+                if ctrl.is_opaque() {
                     touched_razer = true;
                 }
             }
@@ -220,7 +220,7 @@ pub fn apply(cam: &Cam, profile: &Profile) -> ApplyReport {
     // Persist extension-unit state into the camera's own storage so it survives
     // a power cycle even without kiyoctl running.
     if touched_razer {
-        let _ = cam.set(crate::usb::Unit::Razer, 0x01, &controls::RAZER_SAVE);
+        let _ = cam.set(crate::usb::Unit::Razer, 0x01, controls::RAZER_SAVE);
     }
 
     report
