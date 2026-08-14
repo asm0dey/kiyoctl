@@ -9,7 +9,7 @@
 //! performs the writes. That keeps the rendering testable without a webcam.
 
 use crate::controls::{self, Control, Kind};
-use crate::device::Cam;
+use crate::usb::Cam;
 use crate::profile::{self, Profile};
 
 use ratatui::crossterm::event::{
@@ -604,7 +604,7 @@ impl App {
         }
         // Refuse to open a UI onto a camera that answers nothing.
         if !rows.iter().any(|r| !r.ctrl.is_razer()) && !self.cam.responding {
-            return Err(crate::device::NOT_RESPONDING.into());
+            return Err(crate::usb::NOT_RESPONDING.into());
         }
         self.ui.rows = rows;
         Ok(())
@@ -629,7 +629,7 @@ impl App {
             Ok(()) => {
                 if ctrl.is_razer() {
                     // Ask the camera to keep this across a power cycle.
-                    let _ = self.cam.set(crate::device::Unit::Razer, 0x01, &controls::RAZER_SAVE);
+                    let _ = self.cam.set(crate::usb::Unit::Razer, 0x01, &controls::RAZER_SAVE);
                     self.ui.rows[index].value = Some(value.clone());
                 } else {
                     self.refresh_values();

@@ -2,14 +2,14 @@
 //! back after a reboot or a replug.
 
 mod controls;
-mod device;
 mod profile;
 mod service;
 mod tui;
+mod usb;
 
 use clap::{Parser, Subcommand};
 use controls::CONTROLS;
-use device::Cam;
+use usb::Cam;
 use profile::Profile;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -215,7 +215,7 @@ fn cmd_daemon_status() -> Result<(), String> {
 }
 
 fn cmd_list() -> Result<(), String> {
-    let found = device::scan().map_err(|e| e.to_string())?;
+    let found = usb::scan().map_err(|e| e.to_string())?;
     if found.is_empty() {
         println!("No UVC cameras found.");
         return Ok(());
@@ -287,7 +287,7 @@ fn cmd_show(dev: Option<&str>) -> Result<(), String> {
 
     // An empty list from a silent camera is a fault, not a plain camera.
     if rows.is_empty() && !cam.responding {
-        return Err(device::NOT_RESPONDING.into());
+        return Err(usb::NOT_RESPONDING.into());
     }
 
     let width = rows.iter().map(|(n, _, _)| n.len()).max().unwrap_or(0);
@@ -344,7 +344,7 @@ fn cmd_set(dev: Option<&str>, profile_name: &str, args: &[String], no_remember: 
 
     // Ask the camera to keep extension-unit settings in its own storage.
     if touched_razer {
-        let _ = cam.set(device::Unit::Razer, 0x01, &controls::RAZER_SAVE);
+        let _ = cam.set(usb::Unit::Razer, 0x01, &controls::RAZER_SAVE);
     }
 
     if !no_remember {
@@ -497,7 +497,7 @@ fn cmd_daemon(dev: Option<&str>, pinned: Option<&str>, interval: u64) -> Result<
     // attached devices actually changes — or when asked to reload.
     let mut last = String::from("<start>");
     loop {
-        let current = device::fingerprint();
+        let current = usb::fingerprint();
         let reload = RELOAD.swap(false, Ordering::SeqCst);
         if reload {
             log("reload requested");

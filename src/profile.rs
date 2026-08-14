@@ -1,7 +1,7 @@
 //! Saved settings, stored as JSON under ~/.config/kiyoctl/profiles/.
 
 use crate::controls::{self, Kind};
-use crate::device::Cam;
+use crate::usb::Cam;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
 use std::collections::BTreeMap;
@@ -220,7 +220,7 @@ pub fn apply(cam: &Cam, profile: &Profile) -> ApplyReport {
     // Persist extension-unit state into the camera's own storage so it survives
     // a power cycle even without kiyoctl running.
     if touched_razer {
-        let _ = cam.set(crate::device::Unit::Razer, 0x01, &controls::RAZER_SAVE);
+        let _ = cam.set(crate::usb::Unit::Razer, 0x01, &controls::RAZER_SAVE);
     }
 
     report

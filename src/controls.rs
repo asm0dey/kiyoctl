@@ -5,7 +5,7 @@
 //! accepts them but never reports them back — so their state is tracked in the
 //! saved profile rather than queried from hardware.
 
-use crate::device::{Cam, Unit, GET_CUR, GET_DEF, GET_MAX, GET_MIN, GET_RES, INFO_GET, INFO_SET};
+use crate::usb::{Cam, Unit, GET_CUR, GET_DEF, GET_MAX, GET_MIN, GET_RES, INFO_GET, INFO_SET};
 
 /// A single option of a Razer extension-unit control.
 pub struct RazerOpt {
