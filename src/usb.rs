@@ -82,9 +82,6 @@ pub struct Found {
     pub bus: u8,
     pub address: u8,
     /// Every extension unit GUID this camera carries, in descriptor order.
-    // ponytail: no reader until Task 13 adds the "unrecognised extension
-    // unit" marker to `cmd_list`. Drop this allow then.
-    #[allow(dead_code)]
     pub extension_guids: Vec<[u8; 16]>,
 }
 
@@ -221,6 +218,25 @@ pub fn scan() -> rusb::Result<Vec<Found>> {
     Ok(out)
 }
 
+/// The extension units present on a camera that no attached Model addresses.
+/// Pure, so it is testable without hardware.
+pub fn unclaimed(
+    model: Option<&crate::models::Model>,
+    present: &[[u8; 16]],
+) -> Vec<[u8; 16]> {
+    present
+        .iter()
+        .filter(|guid| {
+            !model.is_some_and(|m| {
+                m.controls
+                    .iter()
+                    .any(|c| matches!(c.unit, Unit::Extension(g) if *g == **guid))
+            })
+        })
+        .copied()
+        .collect()
+}
+
 /// Resolve a Unit to the unit id to put in wIndex. Pure, so the "absent GUID
 /// must not fall back to another unit" case is testable without hardware.
 fn find_unit(present: &[([u8; 16], u8)], unit: Unit) -> Option<u8> {
@@ -319,6 +335,12 @@ impl Cam {
     /// Every extension unit GUID this camera carries, in descriptor order.
     pub fn extension_unit_guids(&self) -> Vec<[u8; 16]> {
         self.extension_units.iter().map(|(g, _)| *g).collect()
+    }
+
+    /// Extension units on this camera that its Model does not address — the
+    /// signal that contributed support is possible.
+    pub fn unclaimed_units(&self) -> Vec<[u8; 16]> {
+        unclaimed(self.model, &self.extension_unit_guids())
     }
 
     /// The controls this camera has: standard UVC plus its Model's, if any.
@@ -488,5 +510,26 @@ mod tests {
         );
         assert_eq!(selector, 0x01);
         assert_eq!(payload, &[0xc0, 0x03, 0xa8, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    }
+
+    #[test]
+    fn a_units_claimed_by_the_attached_model_is_not_unrecognised() {
+        let guid = crate::models::razer_kiyo_pro::EU1_GUID;
+        let got = unclaimed(Some(&crate::models::razer_kiyo_pro::MODEL), &[guid]);
+        assert!(got.is_empty(), "the Model's own unit is claimed");
+    }
+
+    #[test]
+    fn a_unit_no_model_claims_is_reported() {
+        let other = [0xaa; 16];
+        let got = unclaimed(Some(&crate::models::razer_kiyo_pro::MODEL), &[other]);
+        assert_eq!(got, vec![other]);
+    }
+
+    #[test]
+    fn with_no_model_every_unit_is_unrecognised() {
+        let a = [0xaa; 16];
+        let b = [0xbb; 16];
+        assert_eq!(unclaimed(None, &[a, b]), vec![a, b]);
     }
 }

@@ -227,6 +227,7 @@ fn cmd_list() -> Result<(), String> {
     for f in &found {
         let extra = match models::for_camera(f.vid, f.pid) {
             Some(m) => format!("  [{}]", m.name),
+            None if !f.extension_guids.is_empty() => "  [unrecognised extension unit]".to_string(),
             None => String::new(),
         };
         println!(
@@ -328,6 +329,23 @@ fn cmd_show(dev: Option<&str>) -> Result<(), String> {
                 println!("  {:<width$}  {:>vwidth$}   {choices}", ctrl.name, "?");
             }
         }
+    }
+
+    let unclaimed = cam.unclaimed_units();
+    if !unclaimed.is_empty() {
+        println!(
+            "\nThis camera has {} extension unit{} kiyoctl does not recognise:",
+            unclaimed.len(),
+            if unclaimed.len() == 1 { "" } else { "s" }
+        );
+        for guid in &unclaimed {
+            println!("  {}  on {:04x}:{:04x}", usb::format_guid(guid), cam.vid, cam.pid);
+        }
+        println!(
+            "\nVendor-specific controls may exist behind {}.\n\
+             Run `kiyoctl probe` to see what answers, then see docs/adding-a-camera.md",
+            if unclaimed.len() == 1 { "it" } else { "them" }
+        );
     }
     Ok(())
 }

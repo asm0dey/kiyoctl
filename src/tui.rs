@@ -103,6 +103,8 @@ pub struct Ui {
     profile_hit: Option<(u16, u16, u16)>,
     /// Rows of the open dialog: (y, entry index).
     menu_hits: Vec<(u16, usize)>,
+    /// Pre-formatted GUIDs of extension units no Model claims.
+    unclaimed: Vec<String>,
 }
 
 /// The profile dialog lists every saved profile, then an entry for making a
@@ -569,6 +571,11 @@ impl App {
             hits: Vec::new(),
             profile_hit: None,
             menu_hits: Vec::new(),
+            unclaimed: cam
+                .unclaimed_units()
+                .iter()
+                .map(crate::usb::format_guid)
+                .collect(),
         };
         let mut app = App { cam, profile, ui, quit: false };
         app.reload()?;
@@ -1007,7 +1014,7 @@ fn render(frame: &mut Frame, ui: &mut Ui) {
 
     ui.menu_hits.clear();
     match &ui.mode {
-        Mode::Help => render_help(frame, frame.area()),
+        Mode::Help => render_help(frame, frame.area(), ui),
         Mode::Profiles { names, selected } => {
             let hits = render_profiles(frame, frame.area(), names, *selected);
             ui.menu_hits = hits;
@@ -1112,9 +1119,9 @@ fn render_new_profile(frame: &mut Frame, area: Rect, buffer: &str) {
     );
 }
 
-fn render_help(frame: &mut Frame, area: Rect) {
+fn render_help(frame: &mut Frame, area: Rect, ui: &Ui) {
     // Kept short enough to fit an 80x24 terminal without clipping.
-    let text = vec![
+    let mut text = vec![
         Line::from(Span::styled(
             "kiyoctl keys",
             Style::default().add_modifier(Modifier::BOLD),
@@ -1145,6 +1152,18 @@ fn render_help(frame: &mut Frame, area: Rect) {
             Style::default().fg(Color::DarkGray),
         )),
     ];
+
+    if !ui.unclaimed.is_empty() {
+        text.push(Line::from(""));
+        text.push(Line::from(format!(
+            "This camera has {} unrecognised extension unit(s):",
+            ui.unclaimed.len()
+        )));
+        for guid in &ui.unclaimed {
+            text.push(Line::from(format!("  {guid}")));
+        }
+        text.push(Line::from("Run `kiyoctl probe`, then see docs/adding-a-camera.md"));
+    }
 
     let w = 63.min(area.width.saturating_sub(4));
     let h = (text.len() as u16 + 2).min(area.height.saturating_sub(2));
@@ -1236,6 +1255,7 @@ mod tests {
             hits: Vec::new(),
             profile_hit: None,
             menu_hits: Vec::new(),
+            unclaimed: Vec::new(),
         }
     }
 
