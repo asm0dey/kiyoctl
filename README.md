@@ -235,10 +235,14 @@ Or take the universal binary straight from
 [Releases](https://github.com/asm0dey/kiyoctl/releases):
 
 ```sh
-tar xzf kiyoctl-v0.1.1-macos-universal.tar.gz
+tar xzf kiyoctl-v0.2.0-macos-universal.tar.gz
 xattr -d com.apple.quarantine kiyoctl    # it is not notarized
 ./kiyoctl install
 ```
+
+Homebrew installs the man pages too: `man kiyoctl`, or `man kiyoctl-set` for a
+subcommand. From a tarball they are in `man1/`, and `kiyoctl man <dir>` writes a
+fresh set at any time.
 
 `kiyoctl install` copies the binary it is running to `~/.local/bin/kiyoctl` and
 points the launchd agent at that copy, so a `brew upgrade` moving the Cellar

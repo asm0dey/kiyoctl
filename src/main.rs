@@ -83,6 +83,9 @@ enum Cmd {
     Uninstall,
     /// Report whether the login agent is running (same as `daemon status`)
     Status,
+    /// Write man pages (kiyoctl.1 and one per subcommand) into a directory
+    #[command(hide = true)]
+    Man { dir: std::path::PathBuf },
 }
 
 #[derive(Subcommand)]
@@ -167,6 +170,11 @@ fn run(cli: &Cli) -> Result<(), String> {
             Ok(())
         }
         Cmd::Status => cmd_daemon_status(),
+        Cmd::Man { dir } => {
+            std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+            clap_mangen::generate_to(<Cli as clap::CommandFactory>::command(), dir)
+                .map_err(|e| format!("{}: {e}", dir.display()))
+        }
     }
 }
 

@@ -25,7 +25,8 @@ jobs:
           lipo -create -output kiyoctl \
             target/aarch64-apple-darwin/release/kiyoctl \
             target/x86_64-apple-darwin/release/kiyoctl
-          tar czf "kiyoctl-${GITHUB_REF_NAME}-macos-universal.tar.gz" kiyoctl
+          ./kiyoctl man man1
+          tar czf "kiyoctl-${GITHUB_REF_NAME}-macos-universal.tar.gz" kiyoctl man1
 
       - name: Publish the release
         run: gh release create "$GITHUB_REF_NAME" --generate-notes kiyoctl-*.tar.gz
