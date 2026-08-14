@@ -81,6 +81,9 @@ pub struct Found {
     pub bus: u8,
     pub address: u8,
     /// Every extension unit GUID this camera carries, in descriptor order.
+    // ponytail: no reader until Task 13 adds the "unrecognised extension
+    // unit" marker to `cmd_list`. Drop this allow then.
+    #[allow(dead_code)]
     pub extension_guids: Vec<[u8; 16]>,
 }
 
@@ -321,17 +324,11 @@ impl Cam {
     }
 
     /// The controls this camera has: standard UVC plus its Model's, if any.
-    // ponytail: no production caller until Tasks 8-9 rewire main.rs/tui.rs
-    // onto it. Drop this allow then.
-    #[allow(dead_code)]
     pub fn controls(&self) -> Vec<&'static crate::controls::Control> {
         crate::controls::effective_controls(self.model)
     }
 
     /// Look a control up among the ones this camera actually has.
-    // ponytail: no production caller until Tasks 8 and 10 rewire the
-    // camera-bound call sites onto it. Drop this allow then.
-    #[allow(dead_code)]
     pub fn find(&self, name: &str) -> Option<&'static crate::controls::Control> {
         self.controls().into_iter().find(|c| c.name == name)
     }

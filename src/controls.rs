@@ -94,9 +94,6 @@ pub static STANDARD: &[Control] = &[
 
 /// The controls a camera covered by `model` has: the standard UVC catalogue
 /// plus whatever that Model adds. Pure, so it is testable without hardware.
-// ponytail: called only by `Cam::controls` and tests until Tasks 8-9 wire
-// that method up from main.rs/tui.rs. Drop this allow then.
-#[allow(dead_code)]
 pub fn effective_controls(model: Option<&'static Model>) -> Vec<&'static Control> {
     STANDARD
         .iter()

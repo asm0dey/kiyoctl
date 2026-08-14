@@ -9,7 +9,6 @@ mod tui;
 mod usb;
 
 use clap::{Parser, Subcommand};
-use controls::STANDARD;
 use usb::Cam;
 use profile::Profile;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -222,7 +221,10 @@ fn cmd_list() -> Result<(), String> {
         return Ok(());
     }
     for f in &found {
-        let extra = if !f.extension_guids.is_empty() { "  [Razer extension unit]" } else { "" };
+        let extra = match models::for_camera(f.vid, f.pid) {
+            Some(m) => format!("  [{}]", m.name),
+            None => String::new(),
+        };
         println!(
             "{}  {:04x}:{:04x}  bus {} addr {}{}",
             f.name, f.vid, f.pid, f.bus, f.address, extra
@@ -232,23 +234,28 @@ fn cmd_list() -> Result<(), String> {
 }
 
 fn cmd_controls() -> Result<(), String> {
-    let width = STANDARD.iter().map(|c| c.name.len()).max().unwrap_or(0);
-    let mut last_razer = false;
-    for (i, ctrl) in STANDARD.iter().enumerate() {
-        if ctrl.is_opaque() && !last_razer {
-            println!("\n  -- Razer Kiyo Pro only, and write-only --");
-        }
-        last_razer = ctrl.is_opaque();
+    let all = controls::every();
+    let width = all.iter().map(|c| c.name.len()).max().unwrap_or(0);
+
+    let describe = |ctrl: &controls::Control| {
         let values = match ctrl.choices() {
             Some(c) => c.join(" | "),
             None => "a number (range depends on the camera)".to_string(),
         };
         println!("  {:<width$}  {}\n  {:<width$}  values: {values}", ctrl.name, ctrl.help, "");
-        if i + 1 < STANDARD.len() {
-            println!();
+        println!();
+    };
+
+    for ctrl in controls::STANDARD {
+        describe(ctrl);
+    }
+    for model in models::MODELS {
+        println!("  -- {} --\n", model.name);
+        for ctrl in model.controls {
+            describe(ctrl);
         }
     }
-    println!("\nNot every camera implements every control; `kiyoctl show` lists what yours does.");
+    println!("Not every camera implements every control; `kiyoctl show` lists what yours does.");
     Ok(())
 }
 
@@ -257,7 +264,7 @@ fn cmd_show(dev: Option<&str>) -> Result<(), String> {
     println!("{} ({:04x}:{:04x})\n", cam.name, cam.vid, cam.pid);
 
     let mut rows: Vec<(String, String, String)> = Vec::new();
-    for ctrl in STANDARD {
+    for ctrl in cam.controls() {
         if ctrl.is_opaque() {
             continue;
         }
@@ -297,11 +304,18 @@ fn cmd_show(dev: Option<&str>) -> Result<(), String> {
         println!("  {name:<width$}  {value:>vwidth$}   {detail}");
     }
 
-    if cam.has_razer_unit() {
-        println!("\nRazer extension unit (write-only — the camera does not report these back):");
-        for ctrl in STANDARD.iter().filter(|c| c.is_opaque()) {
-            let choices = ctrl.choices().unwrap_or_default().join("|");
-            println!("  {:<width$}  {:>vwidth$}   {choices}", ctrl.name, "?");
+    if let Some(model) = cam.model {
+        let opaque: Vec<&controls::Control> =
+            model.controls.iter().filter(|c| c.is_opaque()).collect();
+        if !opaque.is_empty() {
+            println!(
+                "\n{} (write-only — the camera does not report these back):",
+                model.name
+            );
+            for ctrl in opaque {
+                let choices = ctrl.choices().unwrap_or_default().join("|");
+                println!("  {:<width$}  {:>vwidth$}   {choices}", ctrl.name, "?");
+            }
         }
     }
     Ok(())
@@ -331,10 +345,9 @@ fn cmd_set(dev: Option<&str>, profile_name: &str, args: &[String], no_remember: 
 
     let mut touched_extension = false;
     for (name, value) in &pairs {
-        let ctrl = controls::find_any(name).ok_or_else(|| unknown_control(name))?;
-        if ctrl.is_opaque() && !cam.has_razer_unit() {
-            return Err(format!("{} has no Razer extension unit, so {name} is unavailable", cam.name));
-        }
+        let ctrl = cam
+            .find(name)
+            .ok_or_else(|| unavailable_control(&cam, name))?;
         controls::write(&cam, ctrl, value).map_err(|e| cam.explain(e))?;
         touched_extension |= matches!(ctrl.unit, usb::Unit::Extension(_));
         println!("{name} = {value}");
@@ -363,19 +376,21 @@ fn cmd_save(dev: Option<&str>, profile_name: &str) -> Result<(), String> {
     let captured = profile::capture(&cam, &mut prof);
     let path = prof.save(profile_name)?;
     println!("Saved {} settings from {} to {}", captured.len(), cam.name, path.display());
-    if cam.has_razer_unit() {
-        let tracked: Vec<&str> = STANDARD
+    if let Some(model) = cam.model {
+        let tracked: Vec<&str> = model
+            .controls
             .iter()
             .filter(|c| c.is_opaque() && prof.controls.contains_key(c.name))
             .map(|c| c.name)
             .collect();
         if tracked.is_empty() {
             println!(
-                "Note: HDR and other Razer settings cannot be read back. Set them once with \
-                 `kiyoctl set hdr on` and they will be remembered from then on."
+                "Note: {} settings cannot be read back. Set them once with \
+                 `kiyoctl set hdr on` and they will be remembered from then on.",
+                model.name
             );
         } else {
-            println!("Remembered Razer settings: {}", tracked.join(", "));
+            println!("Remembered {} settings: {}", model.name, tracked.join(", "));
         }
     }
     Ok(())
@@ -447,7 +462,7 @@ fn cmd_use(dev: Option<&str>, name: &str) -> Result<(), String> {
 fn cmd_reset(dev: Option<&str>) -> Result<(), String> {
     let cam = Cam::open(dev)?;
     let mut n = 0;
-    for ctrl in STANDARD {
+    for ctrl in cam.controls() {
         if ctrl.is_opaque() {
             continue;
         }
@@ -462,8 +477,13 @@ fn cmd_reset(dev: Option<&str>) -> Result<(), String> {
         }
     }
     println!("Restored {n} controls to the camera's defaults.");
-    if cam.has_razer_unit() {
-        println!("Razer settings (HDR, field of view) were left alone — set them explicitly if needed.");
+    if let Some(model) = cam.model {
+        if model.controls.iter().any(|c| c.is_opaque()) {
+            println!(
+                "{} settings were left alone — set them explicitly if needed.",
+                model.name
+            );
+        }
     }
     Ok(())
 }
@@ -603,8 +623,18 @@ fn parse_assignments(args: &[String]) -> Result<Vec<(String, String)>, String> {
 }
 
 fn unknown_control(name: &str) -> String {
-    let known: Vec<&str> = STANDARD.iter().map(|c| c.name).collect();
+    let known: Vec<&str> = controls::every().iter().map(|c| c.name).collect();
     format!("unknown control '{name}'. Known controls: {}", known.join(", "))
+}
+
+/// A name kiyoctl knows but this camera does not have reads very differently
+/// from a name nobody has ever heard of.
+fn unavailable_control(cam: &Cam, name: &str) -> String {
+    if controls::find_any(name).is_some() {
+        format!("{} does not have {name}", cam.name)
+    } else {
+        unknown_control(name)
+    }
 }
 
 fn log(msg: &str) {
