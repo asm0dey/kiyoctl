@@ -283,4 +283,8 @@ worked out by the [kiyoproctrls](https://github.com/soyersoyer/kiyoproctrls) and
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+GPL-3.0-or-later — see [LICENSE](LICENSE).
+
+Released 0.1.1 and 0.2.0 were MIT and remain so. The change to GPL-3.0-or-later
+is what lets kiyoctl accept camera support contributed from LGPL-3.0 sources —
+see [docs/adr/0001-relicense-to-gpl-3.md](docs/adr/0001-relicense-to-gpl-3.md).

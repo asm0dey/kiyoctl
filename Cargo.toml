@@ -2,7 +2,7 @@
 name = "kiyoctl"
 version = "0.2.0"
 edition = "2021"
-license = "MIT"
+license = "GPL-3.0-or-later"
 
 [dependencies]
 clap = { version = "=4.6.6", features = ["derive"] }
