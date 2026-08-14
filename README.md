@@ -224,6 +224,19 @@ does not clear it. This is a known fault in the device rather than in kiyoctl �
 see [kiyo-xhci-fix](https://github.com/jphein/kiyo-xhci-fix), which exists to
 work around the same bug on Linux.
 
+## Installing
+
+Grab the universal binary from
+[Releases](https://github.com/asm0dey/kiyoctl/releases), or build it yourself:
+
+```sh
+tar xzf kiyoctl-v0.1.0-macos-universal.tar.gz
+./kiyoctl install          # copies to ~/.local/bin and sets up the login agent
+```
+
+It is unsigned, so the first run needs a right-click → Open, or
+`xattr -d com.apple.quarantine kiyoctl`.
+
 ## Building and testing
 
 ```sh
@@ -232,7 +245,7 @@ cargo test                  # unit and snapshot tests, no hardware needed
 cargo test -- --ignored     # additionally renders against an attached camera
 ```
 
-Needs Rust 1.85+ (2024 edition). libusb is built from source by `libusb1-sys`,
+Needs a recent stable Rust (2021 edition). libusb is built from source by `libusb1-sys`,
 so there is no runtime dependency on Homebrew.
 
 The UI is split so that [`Ui`](src/tui.rs) holds everything drawn on screen and
@@ -255,3 +268,7 @@ kiyoctl --device kiyo set hdr on
 The Razer extension-unit protocol — the GUID, selectors, and payloads — was
 worked out by the [kiyoproctrls](https://github.com/soyersoyer/kiyoproctrls) and
 [cameractrls](https://github.com/soyersoyer/cameractrls) projects.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
