@@ -628,13 +628,13 @@ impl App {
         match controls::write(&self.cam, ctrl, &value) {
             Ok(()) => {
                 if ctrl.is_opaque() {
-                    // Ask the camera to keep this across a power cycle.
-                    if let Some((unit, selector, payload)) = self.cam.model.and_then(|m| m.persist) {
-                        let _ = self.cam.set(unit, selector, payload);
-                    }
                     self.ui.rows[index].value = Some(value.clone());
                 } else {
                     self.refresh_values();
+                }
+                if matches!(ctrl.unit, crate::usb::Unit::Extension(_)) {
+                    // A TUI edit is one operation, like one CLI invocation.
+                    self.cam.persist();
                 }
                 self.profile.set(ctrl.name, &value);
                 self.ui.dirty = true;

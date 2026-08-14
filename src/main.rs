@@ -329,14 +329,14 @@ fn cmd_set(dev: Option<&str>, profile_name: &str, args: &[String], no_remember: 
     let cam = Cam::open(dev)?;
     let mut prof = if no_remember { Profile::default() } else { Profile::load_or_default(profile_name)? };
 
-    let mut touched_razer = false;
+    let mut touched_extension = false;
     for (name, value) in &pairs {
         let ctrl = controls::find_any(name).ok_or_else(|| unknown_control(name))?;
         if ctrl.is_opaque() && !cam.has_razer_unit() {
             return Err(format!("{} has no Razer extension unit, so {name} is unavailable", cam.name));
         }
         controls::write(&cam, ctrl, value).map_err(|e| cam.explain(e))?;
-        touched_razer |= ctrl.is_opaque();
+        touched_extension |= matches!(ctrl.unit, usb::Unit::Extension(_));
         println!("{name} = {value}");
         if !no_remember {
             prof.set(name, value);
@@ -344,10 +344,8 @@ fn cmd_set(dev: Option<&str>, profile_name: &str, args: &[String], no_remember: 
     }
 
     // Ask the camera to keep extension-unit settings in its own storage.
-    if touched_razer {
-        if let Some((unit, selector, payload)) = cam.model.and_then(|m| m.persist) {
-            let _ = cam.set(unit, selector, payload);
-        }
+    if touched_extension {
+        cam.persist();
     }
 
     if !no_remember {

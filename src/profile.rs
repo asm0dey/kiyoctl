@@ -179,7 +179,7 @@ pub fn apply(cam: &Cam, profile: &Profile) -> ApplyReport {
         }
     }
 
-    let mut touched_razer = false;
+    let mut touched_extension = false;
     for (ctrl, value) in &planned {
         if ctrl.is_opaque() && !cam.has_razer_unit() {
             report
@@ -209,8 +209,8 @@ pub fn apply(cam: &Cam, profile: &Profile) -> ApplyReport {
         match controls::write(cam, ctrl, value) {
             Ok(()) => {
                 report.applied.push(format!("{} = {}", ctrl.name, value));
-                if ctrl.is_opaque() {
-                    touched_razer = true;
+                if matches!(ctrl.unit, crate::usb::Unit::Extension(_)) {
+                    touched_extension = true;
                 }
             }
             Err(e) => report.skipped.push((ctrl.name.into(), e)),
@@ -219,10 +219,8 @@ pub fn apply(cam: &Cam, profile: &Profile) -> ApplyReport {
 
     // Persist extension-unit state into the camera's own storage so it survives
     // a power cycle even without kiyoctl running.
-    if touched_razer {
-        if let Some((unit, selector, payload)) = cam.model.and_then(|m| m.persist) {
-            let _ = cam.set(unit, selector, payload);
-        }
+    if touched_extension {
+        cam.persist();
     }
 
     report

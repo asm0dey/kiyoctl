@@ -403,6 +403,18 @@ impl Cam {
         }
         self.get(unit, selector, GET_INFO, 1).ok().map(|b| b[0])
     }
+
+    /// Ask the camera to keep its extension-unit state across a power cycle.
+    ///
+    /// Called once per operation that wrote at least one extension-unit
+    /// control — a TUI edit counts as one operation. Silent on failure: the
+    /// settings are already applied, and a camera that refuses to persist is
+    /// not worth failing the command over.
+    pub fn persist(&self) {
+        let Some(model) = self.model else { return };
+        let Some((unit, selector, payload)) = model.persist else { return };
+        let _ = self.set(unit, selector, payload);
+    }
 }
 
 #[cfg(test)]
@@ -476,5 +488,18 @@ mod tests {
             "23e49ed0-1178-4f31-ae52-d2fb8a8d3b48",
             "first three fields are little-endian in the descriptor"
         );
+    }
+
+    #[test]
+    fn the_kiyo_pro_declares_a_persist_triple_on_its_own_unit() {
+        let m = &crate::models::razer_kiyo_pro::MODEL;
+        let (unit, selector, payload) = m.persist.expect("the Kiyo Pro persists its state");
+        assert_eq!(
+            unit,
+            Unit::Extension(&crate::models::razer_kiyo_pro::EU1_GUID),
+            "persist must target the Model's own extension unit, not a hardcoded one"
+        );
+        assert_eq!(selector, 0x01);
+        assert_eq!(payload, &[0xc0, 0x03, 0xa8, 0x00, 0x00, 0x00, 0x00, 0x00]);
     }
 }
