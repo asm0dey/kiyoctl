@@ -10,6 +10,9 @@ permissions:
 jobs:
   release:
     runs-on: macos-latest
+    # Hoisted out of the step's `if`, where the secrets context is not allowed.
+    env:
+      TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
     steps:
       - uses: actions/checkout@v7
 
@@ -32,9 +35,7 @@ jobs:
       # Skipped until TAP_TOKEN exists: a PAT with contents:write on
       # asm0dey/homebrew-tap. github.token cannot write to another repo.
       - name: Point the Homebrew formula at this release
-        if: ${{ secrets.TAP_TOKEN != '' }}
-        env:
-          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        if: ${{ env.TAP_TOKEN != '' }}
         run: |
           sha=$(shasum -a 256 kiyoctl-*.tar.gz | cut -d' ' -f1)
           version=${GITHUB_REF_NAME#v}
