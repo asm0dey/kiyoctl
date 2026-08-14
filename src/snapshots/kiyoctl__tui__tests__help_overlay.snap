@@ -1,0 +1,26 @@
+---
+source: src/tui.rs
+expression: draw(&mut ui)
+---
+"┌ kiyoctl ─────────────────────────────────────────────────────────────────────────────────────────┐"
+"│Razer Kiyo Pro  1┌ help ───────────────────────────────────────────────────────┐                  │"
+"└─────────────────│kiyoctl keys                                                 │──────────────────┘"
+"┌ controls (magent│                                                             │──────────────────┐"
+"│ > brightness    │  ↑ ↓ / j k        move between controls                     │                  │"
+"│   contrast      │  ← → / h l        step a number, cycle a choice             │                  │"
+"│   white_balance_│  ⇧ + ← →          step by ten                               │                  │"
+"│   white_balance │  Enter            type an exact number                      │ked)              │"
+"│   hdr           │  d                this control's camera default             │                  │"
+"│   hdr_mode      │  mouse            click a bar or option; drag to sweep      │                  │"
+"│   fov           │                                                             │                  │"
+"│                 │  s  save profile      a  apply profile                      │                  │"
+"│                 │  R  reset defaults    r  re-read from camera                │                  │"
+"│                 │  p  switch profile    q  quit                               │                  │"
+"│                 │                                                             │                  │"
+"│                 │  Changes reach the camera at once; press s to keep them.    │                  │"
+"│                 │  Magenta controls are write-only — kiyoctl remembers those. │                  │"
+"└─────────────────│                                                             │──────────────────┘"
+"┌─────────────────│  press any key to close                                     │──────────────────┐"
+"│Profile 'default'└─────────────────────────────────────────────────────────────┘                  │"
+"│↑↓ move · ←→ adjust · Enter set · p profile · s save · a apply · R reset · ? help · q quit        │"
+"└──────────────────────────────────────────────────────────────────────────────────────────────────┘"
