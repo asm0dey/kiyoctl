@@ -59,6 +59,10 @@ pub fn run(cam: &Cam) -> String {
         return format!("{} has no extension units.\n", cam.name);
     }
     for guid in guids {
+        eprintln!(
+            "probing extension unit {} — trying every selector, this can take a few minutes on some cameras",
+            format_guid(&guid)
+        );
         // `Box::leak` is how a runtime-discovered GUID reaches a
         // `Unit::Extension(&'static ...)`. It leaks 16 bytes per unit, once,
         // in a command that exits immediately — acceptable here and nowhere
