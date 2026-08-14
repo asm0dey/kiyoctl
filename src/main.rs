@@ -221,7 +221,7 @@ fn cmd_list() -> Result<(), String> {
         return Ok(());
     }
     for f in &found {
-        let extra = if f.has_razer { "  [Razer extension unit]" } else { "" };
+        let extra = if !f.extension_guids.is_empty() { "  [Razer extension unit]" } else { "" };
         println!(
             "{}  {:04x}:{:04x}  bus {} addr {}{}",
             f.name, f.vid, f.pid, f.bus, f.address, extra

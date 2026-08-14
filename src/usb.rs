@@ -61,7 +61,7 @@ pub struct Cam {
     vc_iface: u8,
     camera_id: Option<u8>,
     processing_id: Option<u8>,
-    razer_id: Option<u8>,
+    extension_units: Vec<([u8; 16], u8)>,
 }
 
 /// What a scan found: enough to identify a camera without opening it.
@@ -71,64 +71,93 @@ pub struct Found {
     pub pid: u16,
     pub bus: u8,
     pub address: u8,
-    pub has_razer: bool,
+    /// Every extension unit GUID this camera carries, in descriptor order.
+    pub extension_guids: Vec<[u8; 16]>,
 }
 
 /// Units parsed out of a VideoControl interface descriptor.
-struct Units {
-    vc_iface: u8,
-    camera_id: Option<u8>,
-    processing_id: Option<u8>,
-    razer_id: Option<u8>,
+pub struct ParsedUnits {
+    pub camera_id: Option<u8>,
+    pub processing_id: Option<u8>,
+    /// Every extension unit present, as (GUID, unit id), in descriptor order.
+    pub extensions: Vec<([u8; 16], u8)>,
 }
 
-/// Walk the class-specific descriptors of a VideoControl interface, collecting
-/// the unit IDs we know how to talk to.
-fn parse_units(dev: &Device<GlobalContext>) -> Option<Units> {
+/// Walk the class-specific descriptor bytes of a VideoControl interface.
+///
+/// Pure: takes the raw `extra` block so it can be tested without hardware.
+fn parse_extra(extra: &[u8]) -> ParsedUnits {
+    let mut units = ParsedUnits {
+        camera_id: None,
+        processing_id: None,
+        extensions: Vec::new(),
+    };
+    let mut i = 0usize;
+    while i + 3 <= extra.len() {
+        let len = extra[i] as usize;
+        if len < 3 || i + len > extra.len() {
+            break;
+        }
+        let block = &extra[i..i + len];
+        if block[1] == CS_INTERFACE {
+            match block[2] {
+                // Input terminal is only a camera if its type says so.
+                VC_INPUT_TERMINAL if len >= 6 => {
+                    let ttype = u16::from_le_bytes([block[4], block[5]]);
+                    if ttype == ITT_CAMERA {
+                        units.camera_id = Some(block[3]);
+                    }
+                }
+                VC_PROCESSING_UNIT if len >= 4 => units.processing_id = Some(block[3]),
+                VC_EXTENSION_UNIT if len >= 20 => {
+                    let mut guid = [0u8; 16];
+                    guid.copy_from_slice(&block[4..20]);
+                    units.extensions.push((guid, block[3]));
+                }
+                _ => {}
+            }
+        }
+        i += len;
+    }
+    units
+}
+
+/// The VideoControl interface number plus the units behind it.
+struct Interface {
+    vc_iface: u8,
+    units: ParsedUnits,
+}
+
+fn parse_units(dev: &Device<GlobalContext>) -> Option<Interface> {
     let config = dev.active_config_descriptor().ok()?;
     for iface in config.interfaces() {
         for desc in iface.descriptors() {
             if desc.class_code() != CC_VIDEO || desc.sub_class_code() != SC_VIDEOCONTROL {
                 continue;
             }
-            let mut units = Units {
+            return Some(Interface {
                 vc_iface: desc.interface_number(),
-                camera_id: None,
-                processing_id: None,
-                razer_id: None,
-            };
-            let extra = desc.extra();
-            let mut i = 0usize;
-            while i + 3 <= extra.len() {
-                let len = extra[i] as usize;
-                if len < 3 || i + len > extra.len() {
-                    break;
-                }
-                let block = &extra[i..i + len];
-                if block[1] == CS_INTERFACE {
-                    match block[2] {
-                        // Input terminal is only a camera if its type says so.
-                        VC_INPUT_TERMINAL if len >= 6 => {
-                            let ttype = u16::from_le_bytes([block[4], block[5]]);
-                            if ttype == ITT_CAMERA {
-                                units.camera_id = Some(block[3]);
-                            }
-                        }
-                        VC_PROCESSING_UNIT if len >= 4 => units.processing_id = Some(block[3]),
-                        VC_EXTENSION_UNIT if len >= 20 => {
-                            if block[4..20] == RAZER_EU1_GUID {
-                                units.razer_id = Some(block[3]);
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                i += len;
-            }
-            return Some(units);
+                units: parse_extra(desc.extra()),
+            });
         }
     }
     None
+}
+
+/// Render a descriptor GUID the way vendors publish it. The first three fields
+/// are stored little-endian in the descriptor; the last two are not.
+// ponytail: not called from production code yet — a later task in this refactor
+// wires it into vendor lookup / display. Remove this allow once that lands.
+#[allow(dead_code)]
+pub fn format_guid(b: &[u8; 16]) -> String {
+    format!(
+        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{}",
+        b[3], b[2], b[1], b[0],
+        b[5], b[4],
+        b[7], b[6],
+        b[8], b[9],
+        b[10..16].iter().map(|x| format!("{x:02x}")).collect::<String>()
+    )
 }
 
 /// A cheap signature of the UVC cameras currently attached.
@@ -161,12 +190,10 @@ pub fn fingerprint() -> String {
 pub fn scan() -> rusb::Result<Vec<Found>> {
     let mut out = Vec::new();
     for dev in rusb::devices()?.iter() {
-        let Some(units) = parse_units(&dev) else {
+        let Some(iface) = parse_units(&dev) else {
             continue;
         };
         let desc = dev.device_descriptor()?;
-        // Opening is what yields a product string; a camera we cannot open is
-        // still worth listing, just with a fallback name.
         let name = dev
             .open()
             .ok()
@@ -178,9 +205,8 @@ pub fn scan() -> rusb::Result<Vec<Found>> {
             pid: desc.product_id(),
             bus: dev.bus_number(),
             address: dev.address(),
-            has_razer: units.razer_id.is_some(),
+            extension_guids: iface.units.extensions.iter().map(|(g, _)| *g).collect(),
         });
-        let _ = units.vc_iface;
     }
     Ok(out)
 }
@@ -191,11 +217,11 @@ impl Cam {
     pub fn open(selector: Option<&str>) -> Result<Cam, String> {
         let mut candidates = Vec::new();
         for dev in rusb::devices().map_err(|e| e.to_string())?.iter() {
-            let Some(units) = parse_units(&dev) else {
+            let Some(iface) = parse_units(&dev) else {
                 continue;
             };
             let desc = dev.device_descriptor().map_err(|e| e.to_string())?;
-            candidates.push((dev, desc, units));
+            candidates.push((dev, desc, iface));
         }
         if candidates.is_empty() {
             return Err("no UVC camera found".into());
@@ -240,7 +266,7 @@ impl Cam {
             }
         };
 
-        let (dev, desc, units) = chosen;
+        let (dev, desc, iface) = chosen;
         let handle = dev.open().map_err(|e| match e {
             rusb::Error::Access => "permission denied opening the camera".to_string(),
             other => format!("cannot open camera: {other}"),
@@ -259,15 +285,15 @@ impl Cam {
             vid: desc.vendor_id(),
             pid: desc.product_id(),
             responding,
-            vc_iface: units.vc_iface,
-            camera_id: units.camera_id,
-            processing_id: units.processing_id,
-            razer_id: units.razer_id,
+            vc_iface: iface.vc_iface,
+            camera_id: iface.units.camera_id,
+            processing_id: iface.units.processing_id,
+            extension_units: iface.units.extensions,
         })
     }
 
     pub fn has_razer_unit(&self) -> bool {
-        self.razer_id.is_some()
+        self.extension_units.iter().any(|(g, _)| *g == RAZER_EU1_GUID)
     }
 
     /// Replace a low-level transfer error with something actionable when the
@@ -284,7 +310,11 @@ impl Cam {
         match unit {
             Unit::Camera => self.camera_id,
             Unit::Processing => self.processing_id,
-            Unit::Razer => self.razer_id,
+            Unit::Razer => self
+                .extension_units
+                .iter()
+                .find(|(g, _)| *g == RAZER_EU1_GUID)
+                .map(|(_, id)| *id),
         }
     }
 
@@ -328,5 +358,65 @@ impl Cam {
             return None;
         }
         self.get(unit, selector, GET_INFO, 1).ok().map(|b| b[0])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A minimal VideoControl class-specific descriptor block: one camera
+    /// input terminal, one processing unit, two extension units.
+    fn sample_extra() -> Vec<u8> {
+        let mut v = Vec::new();
+        // Input terminal, id 1, type ITT_CAMERA (0x0201)
+        v.extend_from_slice(&[6, CS_INTERFACE, VC_INPUT_TERMINAL, 1, 0x01, 0x02]);
+        // Input terminal, id 9, type 0x0101 (streaming) — must be ignored
+        v.extend_from_slice(&[6, CS_INTERFACE, VC_INPUT_TERMINAL, 9, 0x01, 0x01]);
+        // Processing unit, id 2
+        v.extend_from_slice(&[4, CS_INTERFACE, VC_PROCESSING_UNIT, 2]);
+        // Extension unit, id 3, Razer's GUID
+        let mut eu = vec![20, CS_INTERFACE, VC_EXTENSION_UNIT, 3];
+        eu.extend_from_slice(&RAZER_EU1_GUID);
+        v.extend_from_slice(&eu);
+        // Extension unit, id 4, some other GUID
+        let mut eu2 = vec![20, CS_INTERFACE, VC_EXTENSION_UNIT, 4];
+        eu2.extend_from_slice(&[0xaa; 16]);
+        v.extend_from_slice(&eu2);
+        v
+    }
+
+    #[test]
+    fn parses_every_unit_kind() {
+        let p = parse_extra(&sample_extra());
+        assert_eq!(p.camera_id, Some(1), "streaming terminal must not win");
+        assert_eq!(p.processing_id, Some(2));
+        assert_eq!(p.extensions.len(), 2, "both extension units must be returned");
+        assert_eq!(p.extensions[0], (RAZER_EU1_GUID, 3));
+        assert_eq!(p.extensions[1], ([0xaa; 16], 4));
+    }
+
+    #[test]
+    fn truncated_descriptor_does_not_panic() {
+        let full = sample_extra();
+        for cut in 0..full.len() {
+            let _ = parse_extra(&full[..cut]);
+        }
+    }
+
+    #[test]
+    fn zero_length_block_does_not_loop_forever() {
+        // A malformed block claiming length 0 must terminate the walk.
+        let p = parse_extra(&[0, CS_INTERFACE, VC_PROCESSING_UNIT, 7]);
+        assert_eq!(p.processing_id, None);
+    }
+
+    #[test]
+    fn guid_renders_in_canonical_form() {
+        assert_eq!(
+            format_guid(&RAZER_EU1_GUID),
+            "23e49ed0-1178-4f31-ae52-d2fb8a8d3b48",
+            "first three fields are little-endian in the descriptor"
+        );
     }
 }
