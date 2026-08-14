@@ -1,6 +1,7 @@
 //! Saved settings, stored as JSON under ~/.config/kiyoctl/profiles/.
 
 use crate::controls::{self, Kind};
+use crate::models;
 use crate::usb::Cam;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
@@ -68,8 +69,14 @@ impl Profile {
         let path = profile_path(name);
         let text = std::fs::read_to_string(&path)
             .map_err(|e| format!("cannot read profile '{name}' ({}): {e}", path.display()))?;
-        let mut profile: Profile = serde_json::from_str(&text)
-            .map_err(|e| format!("profile '{name}' is not valid JSON: {e}"))?;
+        Profile::from_json(&text).map_err(|e| format!("profile '{name}' {e}"))
+    }
+
+    /// Parse a stored profile. Every read goes through here so nothing can
+    /// reach the rest of kiyoctl unmigrated.
+    pub fn from_json(text: &str) -> Result<Profile, String> {
+        let mut profile: Profile =
+            serde_json::from_str(text).map_err(|e| format!("is not valid JSON: {e}"))?;
         profile.migrate();
         Ok(profile)
     }
@@ -92,15 +99,25 @@ impl Profile {
     ///
     /// Profiles written by 0.2.0 keep `hdr` and `fov` in the flat map. Applying
     /// that map as standard-controls-only would silently stop applying them, so
-    /// this runs on every load. Idempotent. A profile with no recorded camera
-    /// keeps its values flat, because guessing which camera they came from is
-    /// worse than leaving them where they are.
+    /// this runs on every load. Idempotent.
+    ///
+    /// A value only moves when the recorded camera's own Model declares it.
+    /// Anything else stays flat, where it goes on applying to whatever camera
+    /// declares it: 0.2.0's `set` overwrote the recorded identity on every
+    /// camera it touched, so a profile can name camera B while carrying camera
+    /// A's vendor values, and these values cannot be read back from hardware —
+    /// never relocate one on a guess. Same reason a profile with no recorded
+    /// camera keeps everything flat. See ADR 0003.
     pub fn migrate(&mut self) {
         let Some(camera) = self.camera.clone() else { return };
+        let Some(model) = parse_key(&camera).and_then(|(vid, pid)| models::for_camera(vid, pid))
+        else {
+            return;
+        };
         let moving: Vec<String> = self
             .controls
             .keys()
-            .filter(|name| controls::is_model_control(name))
+            .filter(|name| model.controls.iter().any(|c| c.name == name.as_str()))
             .cloned()
             .collect();
         if moving.is_empty() {
@@ -202,6 +219,13 @@ impl Profile {
         names.sort();
         names
     }
+}
+
+/// The inverse of `Profile::key`. Anything else recorded there is not a camera
+/// this kiyoctl can reason about.
+fn parse_key(key: &str) -> Option<(u16, u16)> {
+    let (vid, pid) = key.split_once(':')?;
+    Some((u16::from_str_radix(vid, 16).ok()?, u16::from_str_radix(pid, 16).ok()?))
 }
 
 pub(crate) fn render(v: &Json) -> String {
@@ -377,6 +401,50 @@ mod tests {
         let values = p.values_for(0x046d, 0x085e);
         assert!(values.contains_key("brightness"), "standard controls are portable");
         assert!(!values.contains_key("hdr"), "another camera's section must not apply");
+    }
+
+    /// 0.2.0's `set` overwrote the recorded camera on every camera it touched,
+    /// so a profile can name camera B while carrying camera A's hdr. Homing
+    /// that value to B would stop it ever applying to A again, and it cannot be
+    /// read back off A to recover it.
+    #[test]
+    fn a_value_the_recorded_camera_does_not_have_is_left_where_it_still_applies() {
+        let mut p: Profile = serde_json::from_str(
+            r#"{
+                "device": "046d:085e",
+                "controls": { "brightness": 129, "hdr": "on" }
+            }"#,
+        )
+        .unwrap();
+        p.migrate();
+        assert!(p.controls.contains_key("hdr"), "the Logitech has no hdr to home it to");
+        assert!(p.per_camera.is_empty());
+        assert_eq!(p.values_for(0x1532, 0x0e05).get("hdr").unwrap(), "on", "still reaches the Kiyo Pro");
+    }
+
+    /// Two copies of one name: the section is what `values_for` would have
+    /// applied, so migration must not let the flat one overwrite it.
+    #[test]
+    fn migration_keeps_the_section_value_when_both_maps_hold_a_name() {
+        let mut p: Profile = serde_json::from_str(
+            r#"{
+                "camera": "1532:0e05",
+                "controls": { "hdr": "off" },
+                "per_camera": { "1532:0e05": { "hdr": "on" } }
+            }"#,
+        )
+        .unwrap();
+        p.migrate();
+        assert!(!p.controls.contains_key("hdr"), "the flat duplicate goes");
+        assert_eq!(p.values_for(0x1532, 0x0e05)["hdr"], "on", "the section wins, as it does in values_for");
+    }
+
+    #[test]
+    fn reading_a_profile_migrates_it() {
+        // `load` only reads the file; `from_json` is the whole of the rest.
+        let p = Profile::from_json(OLD_FORMAT).unwrap();
+        assert_eq!(p.per_camera["1532:0e05"]["hdr"], "on", "parsing must migrate, not just deserialise");
+        assert!(!p.controls.contains_key("hdr"));
     }
 
     #[test]

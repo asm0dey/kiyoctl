@@ -28,15 +28,31 @@ because sections did not exist when they were written. Applying the flat map as
 Standard-controls-only would silently stop applying them for every existing
 user, so migration is not optional and is the load-bearing part of this ADR.
 
-On load, a Model control found in the flat map moves into the section for the
-Camera the Profile records. Old Profiles record it in `device`, read through a
-serde alias on `camera`. The pass is deterministic and invisible; the file is
-rewritten on next save.
+On load, a value found in the flat map moves into the section for the Camera the
+Profile records **only when that Camera's own Model declares it**. Old Profiles
+record the Camera in `device`, read through a serde alias on `camera`. The pass
+is deterministic and invisible; the file is rewritten on next save.
 
-A Profile with no recorded Camera — possible, since `Profile::default()` leaves
-it unset and the set-and-save path never fills it — keeps its Model values in
-the flat map and keeps applying them to any Camera whose Model declares them.
-Guessing which Camera they belonged to would be worse than leaving them put.
+Everything else stays flat, where it goes on applying to any Camera whose Model
+declares it. Two cases reach that rule, and one governs both: a value that cannot
+be read back from hardware is never worth relocating on a guess, because a
+mis-homed one is unrecoverable and silent.
+
+- **No recorded Camera.** Possible, since `Profile::default()` leaves it unset
+  and the set-and-save path never fills it. There is nothing to key a section by.
+- **A Camera that does not have the control.** This is the chimera file from the
+  Context above, and it is the common case rather than a curiosity: 0.2.0's
+  `cmd_set` overwrote the recorded identity on every Camera it touched, so a
+  Kiyo Pro owner who ran one `set` against a second webcam has a Profile naming
+  that webcam while carrying the Razer's flat `hdr`. Homing `hdr` to the webcam
+  would stop it ever applying to the Kiyo Pro again — a downgrade for the exact
+  population this ADR exists to protect. A Profile recording a Camera with no
+  Model at all, or an identity that does not parse as `vvvv:pppp`, is the same
+  case: nothing moves.
+
+Which is to say: migration only ever moves a value it can prove belongs where it
+is going. A Model control that stayed flat is not a failure — `apply` merges the
+flat map with the attached Camera's section, so it is still written.
 
 ## Consequences
 
