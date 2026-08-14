@@ -1,11 +1,14 @@
 # kiyoctl
 
-Command-line control of USB webcam settings on macOS, with saved profiles that
-are reapplied at login and whenever the camera is reconnected.
+Command-line and terminal-UI control of the **Razer Kiyo Pro** on macOS, with
+saved profiles that are reapplied at login and whenever the camera is
+reconnected. HDR, HDR mode, field of view and autofocus responsiveness come from
+Razer's vendor extension unit; brightness, white balance, exposure, focus and
+zoom are standard UVC.
 
-Works with any UVC camera for standard controls. On the **Razer Kiyo Pro** it
-additionally exposes HDR, HDR mode, field of view, and autofocus responsiveness
-through Razer's vendor extension unit.
+Other webcams work too, for the standard UVC controls — macOS gives you no way
+to touch those otherwise. Only the Kiyo Pro's extension unit is decoded, so
+another vendor's custom settings are not exposed.
 
 ## How it works
 
@@ -15,8 +18,8 @@ driver or with apps using the camera. No sudo, no kernel extension.
 
 ```
 kiyoctl ──libusb──► control endpoint ──► ┌─ camera terminal   (exposure, focus, zoom)
-                                        ├─ processing unit   (brightness, white balance)
-                                        └─ Razer ext. unit   (HDR, field of view)
+                                         ├─ processing unit   (brightness, white balance)
+                                         └─ Razer ext. unit   (HDR, field of view)
 ```
 
 ## Interactive UI
@@ -24,10 +27,10 @@ kiyoctl ──libusb──► control endpoint ──► ┌─ camera terminal 
 Run `kiyoctl` with no arguments (or `kiyoctl tui`):
 
 ```
-┌ kiyoctl ──────────────────────────────────────────────────────────────────┐
+┌ kiyoctl ─────────────────────────────────────────────────────────────────┐
 │Razer Kiyo Pro  1532:0e05   profile: default  * unsaved                   │
 └──────────────────────────────────────────────────────────────────────────┘
-┌ controls (magenta = write-only, remembered by kiyoctl) ───────────────────┐
+┌ controls (magenta = write-only, remembered by kiyoctl) ──────────────────┐
 │ > brightness             129  ████████████████················  0..255   │
 │   white_balance_auto     off  off on                                     │
 │   white_balance         4430  ██████████████··················  2000..75 │
