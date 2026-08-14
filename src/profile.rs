@@ -200,6 +200,14 @@ impl Profile {
         mine.and_then(|s| s.get(control)).map(render)
     }
 
+    /// The camera this profile was captured from, when that is not the camera
+    /// being applied to. Informational: cross-camera profiles are legitimate,
+    /// since standard UVC values transfer.
+    pub fn foreign_to(&self, vid: u16, pid: u16) -> Option<String> {
+        let recorded = self.camera.clone()?;
+        (recorded != Profile::key(vid, pid)).then_some(recorded)
+    }
+
     pub fn list() -> Vec<String> {
         let dir = config_dir().join("profiles");
         let Ok(entries) = std::fs::read_dir(dir) else {
@@ -484,6 +492,19 @@ mod tests {
         );
         assert!(!p.values_for(0x046d, 0x085e).contains_key("hdr"));
         assert_eq!(p.values_for(0x1532, 0x0e05)["hdr"], "on");
+    }
+
+    #[test]
+    fn a_profile_from_another_camera_is_flagged() {
+        let mut p = Profile::default();
+        p.camera = Some("1532:0e05".into());
+        assert_eq!(p.foreign_to(0x046d, 0x085e).as_deref(), Some("1532:0e05"));
+        assert_eq!(p.foreign_to(0x1532, 0x0e05), None, "its own camera is not foreign");
+    }
+
+    #[test]
+    fn a_profile_with_no_recorded_camera_is_never_foreign() {
+        assert_eq!(Profile::default().foreign_to(0x046d, 0x085e), None);
     }
 
     #[test]

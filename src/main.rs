@@ -376,6 +376,14 @@ fn cmd_save(dev: Option<&str>, profile_name: &str) -> Result<(), String> {
     let cam = Cam::open(dev)?;
     // Start from what is already stored so write-only values are not lost.
     let mut prof = Profile::load_or_default(profile_name)?;
+    // Check before `capture` re-homes the profile: afterwards this can only
+    // ever return None, since `capture` stamps the new identity itself.
+    if let Some(from) = prof.foreign_to(cam.vid, cam.pid) {
+        eprintln!(
+            "this profile was last saved from {from}; re-homing it to {} ({:04x}:{:04x}) — {from}'s settings stay in their own section, not lost",
+            cam.name, cam.vid, cam.pid
+        );
+    }
     let captured = profile::capture(&cam, &mut prof);
     let path = prof.save(profile_name)?;
     println!("Saved {} settings from {} to {}", captured.len(), cam.name, path.display());
@@ -404,6 +412,13 @@ fn cmd_save(dev: Option<&str>, profile_name: &str) -> Result<(), String> {
 fn cmd_apply(dev: Option<&str>, profile_name: &str) -> Result<(), String> {
     let cam = Cam::open(dev)?;
     let prof = Profile::load(profile_name)?;
+    if let Some(from) = prof.foreign_to(cam.vid, cam.pid) {
+        let was = prof.name.as_deref().unwrap_or("another camera");
+        eprintln!(
+            "this profile was captured from {was} ({from}); applying to {} ({:04x}:{:04x})",
+            cam.name, cam.vid, cam.pid
+        );
+    }
     let report = profile::apply(&cam, &prof);
     for line in &report.applied {
         println!("{line}");
@@ -455,6 +470,13 @@ fn cmd_use(dev: Option<&str>, name: &str) -> Result<(), String> {
     // Put it on the camera straight away, the way choosing one in the UI does.
     match Cam::open(dev) {
         Ok(cam) => {
+            if let Some(from) = prof.foreign_to(cam.vid, cam.pid) {
+                let was = prof.name.as_deref().unwrap_or("another camera");
+                eprintln!(
+                    "this profile was captured from {was} ({from}); applying to {} ({:04x}:{:04x})",
+                    cam.name, cam.vid, cam.pid
+                );
+            }
             let report = profile::apply(&cam, &prof);
             for (control, why) in &report.skipped {
                 eprintln!("skipped {control}: {why}");
