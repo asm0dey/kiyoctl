@@ -325,11 +325,6 @@ impl Cam {
         self.controls().into_iter().find(|c| c.name == name)
     }
 
-    /// The Model's name, for user-facing text.
-    pub fn model_name(&self) -> Option<&'static str> {
-        self.model.map(|m| m.name)
-    }
-
     /// Replace a low-level transfer error with something actionable when the
     /// device has stopped answering altogether.
     pub fn explain(&self, e: String) -> String {

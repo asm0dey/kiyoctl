@@ -90,12 +90,6 @@ pub struct Ui {
     device_name: String,
     vid: u16,
     pid: u16,
-    /// The attached camera's Model, if kiyoctl has one for it.
-    // ponytail: no reader yet — rendering must stay byte-identical for this
-    // task, so nothing consumes this field within it. Drop this allow once a
-    // header/help display reads it.
-    #[allow(dead_code)]
-    model_name: Option<String>,
     profile_name: String,
     rows: Vec<Row>,
     list: ListState,
@@ -562,7 +556,6 @@ impl App {
             device_name: cam.name.clone(),
             vid: cam.vid,
             pid: cam.pid,
-            model_name: cam.model_name().map(str::to_string),
             profile_name: profile_name.to_string(),
             rows: Vec::new(),
             list: ListState::default().with_selected(Some(0)),
@@ -1220,7 +1213,6 @@ mod tests {
             device_name: "Razer Kiyo Pro".into(),
             vid: 0x1532,
             pid: 0x0e05,
-            model_name: Some("Razer Kiyo Pro".into()),
             profile_name: "default".into(),
             rows: vec![
                 row("brightness", Some("129"), Some((0, 255)), 1),
