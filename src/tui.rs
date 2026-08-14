@@ -1156,8 +1156,9 @@ fn render_help(frame: &mut Frame, area: Rect, ui: &Ui) {
     if !ui.unclaimed.is_empty() {
         text.push(Line::from(""));
         text.push(Line::from(format!(
-            "This camera has {} unrecognised extension unit(s):",
-            ui.unclaimed.len()
+            "This camera has {} extension unit{} kiyoctl does not recognise:",
+            ui.unclaimed.len(),
+            if ui.unclaimed.len() == 1 { "" } else { "s" }
         )));
         for guid in &ui.unclaimed {
             text.push(Line::from(format!("  {guid}")));
