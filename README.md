@@ -235,7 +235,7 @@ Or take the universal binary straight from
 [Releases](https://github.com/asm0dey/kiyoctl/releases):
 
 ```sh
-tar xzf kiyoctl-v0.1.0-macos-universal.tar.gz
+tar xzf kiyoctl-v0.1.1-macos-universal.tar.gz
 xattr -d com.apple.quarantine kiyoctl    # it is not notarized
 ./kiyoctl install
 ```
