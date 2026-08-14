@@ -320,6 +320,30 @@ impl Cam {
         self.model.is_some()
     }
 
+    /// The controls this camera has: standard UVC plus its Model's, if any.
+    // ponytail: no production caller until Tasks 8-9 rewire main.rs/tui.rs
+    // onto it. Drop this allow then.
+    #[allow(dead_code)]
+    pub fn controls(&self) -> Vec<&'static crate::controls::Control> {
+        crate::controls::effective_controls(self.model)
+    }
+
+    /// Look a control up among the ones this camera actually has.
+    // ponytail: no production caller until Tasks 8 and 10 rewire the
+    // camera-bound call sites onto it. Drop this allow then.
+    #[allow(dead_code)]
+    pub fn find(&self, name: &str) -> Option<&'static crate::controls::Control> {
+        self.controls().into_iter().find(|c| c.name == name)
+    }
+
+    /// The Model's name, for user-facing text.
+    // ponytail: no production caller until Task 9 wires up the TUI header.
+    // Drop this allow then.
+    #[allow(dead_code)]
+    pub fn model_name(&self) -> Option<&'static str> {
+        self.model.map(|m| m.name)
+    }
+
     /// Replace a low-level transfer error with something actionable when the
     /// device has stopped answering altogether.
     pub fn explain(&self, e: String) -> String {

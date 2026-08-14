@@ -11,17 +11,15 @@ use crate::usb::Unit;
 
 pub struct Model {
     /// Shown in the TUI header, in `list`, and as a `list-controls` heading.
-    // ponytail: read only by tests until Task 9 wires up `Cam::model_name`.
-    // Drop this allow then.
+    // ponytail: `Cam::model_name` (Task 6) reads this field, but nothing calls
+    // `Cam::model_name` from production code yet — Task 9 wires that up. Drop
+    // this allow then.
     #[allow(dead_code)]
     pub name: &'static str,
     /// The vid:pid pairs this Model covers. Required, non-empty. This is the
     /// only thing matching looks at — see ADR 0002.
     pub usb_ids: &'static [(u16, u16)],
     /// Controls this camera adds on top of the standard UVC catalogue.
-    // ponytail: read only by tests until Task 6 adds `effective_controls`.
-    // Drop this allow then.
-    #[allow(dead_code)]
     pub controls: &'static [Control],
     /// Unit, selector and payload that tell the camera to keep its extension
     /// unit state across a power cycle. Issued once per operation that wrote

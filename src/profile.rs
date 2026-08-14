@@ -89,7 +89,7 @@ impl Profile {
 
     /// Record one control value, preserving natural JSON types.
     pub fn set(&mut self, control: &str, value: &str) {
-        let json = match controls::find(control).map(|c| &c.kind) {
+        let json = match controls::find_any(control).map(|c| &c.kind) {
             Some(Kind::Int { .. }) => value
                 .parse::<i64>()
                 .map(Json::from)
@@ -168,13 +168,13 @@ pub fn apply(cam: &Cam, profile: &Profile) -> ApplyReport {
     let mut planned: Vec<(&'static crate::controls::Control, String)> = profile
         .controls
         .iter()
-        .filter_map(|(name, value)| controls::find(name).map(|c| (c, render(value))))
+        .filter_map(|(name, value)| controls::find_any(name).map(|c| (c, render(value))))
         .collect();
     planned.sort_by_key(|(c, _)| c.order);
 
     // Unknown names are worth surfacing rather than silently dropping.
     for name in profile.controls.keys() {
-        if controls::find(name).is_none() {
+        if controls::find_any(name).is_none() {
             report.skipped.push((name.clone(), "unknown control".into()));
         }
     }
@@ -193,7 +193,7 @@ pub fn apply(cam: &Cam, profile: &Profile) -> ApplyReport {
         if let Some((dep, allowed)) = ctrl.requires {
             let dep_value = profile
                 .get(dep)
-                .or_else(|| controls::find(dep).and_then(|d| controls::read(cam, d).ok().flatten()).map(|r| r.value));
+                .or_else(|| controls::find_any(dep).and_then(|d| controls::read(cam, d).ok().flatten()).map(|r| r.value));
             match dep_value {
                 Some(v) if allowed.contains(&v.as_str()) => {}
                 Some(v) => {

@@ -1202,7 +1202,7 @@ mod tests {
 
     fn row(name: &str, value: Option<&str>, range: Option<(i64, i64)>, step: i64) -> Row {
         Row {
-            ctrl: controls::find(name).expect("known control"),
+            ctrl: controls::find_any(name).expect("known control"),
             value: value.map(str::to_string),
             range,
             step,

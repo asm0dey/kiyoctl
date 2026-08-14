@@ -5,6 +5,7 @@
 //! accepts them but never reports them back — so their state is tracked in the
 //! saved profile rather than queried from hardware. They live in `src/models/`.
 
+use crate::models::{Model, MODELS};
 use crate::usb::{Cam, Unit, GET_CUR, GET_DEF, GET_MAX, GET_MIN, GET_RES, INFO_GET, INFO_SET};
 
 /// A single named payload of an opaque control.
@@ -91,8 +92,39 @@ pub static STANDARD: &[Control] = &[
         kind: Kind::Int { signed: false }, help: "optical zoom", order: 1, requires: None },
 ];
 
-pub fn find(name: &str) -> Option<&'static Control> {
-    STANDARD.iter().find(|c| c.name == name)
+/// The controls a camera covered by `model` has: the standard UVC catalogue
+/// plus whatever that Model adds. Pure, so it is testable without hardware.
+// ponytail: called only by `Cam::controls` and tests until Tasks 8-9 wire
+// that method up from main.rs/tui.rs. Drop this allow then.
+#[allow(dead_code)]
+pub fn effective_controls(model: Option<&'static Model>) -> Vec<&'static Control> {
+    STANDARD
+        .iter()
+        .chain(model.into_iter().flat_map(|m| m.controls.iter()))
+        .collect()
+}
+
+/// Every control kiyoctl knows about, across every registered Model. For
+/// `list-controls` and for telling "not on this camera" from "no such control".
+pub fn every() -> Vec<&'static Control> {
+    STANDARD
+        .iter()
+        .chain(MODELS.iter().flat_map(|m| m.controls.iter()))
+        .collect()
+}
+
+/// Look a name up with no camera open. Use `Cam::find` when there is one.
+pub fn find_any(name: &str) -> Option<&'static Control> {
+    every().into_iter().find(|c| c.name == name)
+}
+
+/// True when this name belongs to a Model rather than the standard catalogue.
+/// Used by profile migration to decide what moves into a per-camera section.
+// ponytail: read only by tests until Task 10 wires up profile migration.
+// Drop this allow then.
+#[allow(dead_code)]
+pub fn is_model_control(name: &str) -> bool {
+    MODELS.iter().any(|m| m.controls.iter().any(|c| c.name == name))
 }
 
 impl Control {
@@ -251,15 +283,15 @@ mod tests {
 
     #[test]
     fn opaque_controls_report_their_option_names() {
-        let hdr = find("hdr").expect("hdr must exist");
+        let hdr = find_any("hdr").expect("hdr must exist");
         assert!(hdr.is_opaque());
         assert_eq!(hdr.choices(), Some(vec!["off", "on"]));
     }
 
     #[test]
     fn standard_controls_are_not_opaque() {
-        assert!(!find("brightness").unwrap().is_opaque());
-        assert!(!find("auto_exposure").unwrap().is_opaque());
+        assert!(!find_any("brightness").unwrap().is_opaque());
+        assert!(!find_any("auto_exposure").unwrap().is_opaque());
     }
 
     #[test]
@@ -273,5 +305,53 @@ mod tests {
         }];
         assert_eq!(WIDE[0].payload.len(), 3);
         assert_eq!(WIDE[0].pre.unwrap().len(), 12);
+    }
+
+    /// The regression guard for the whole device-SPI refactor: the control
+    /// list a Kiyo Pro sees must be byte-for-byte what 0.2.0 produced, in the
+    /// same order. If this fails, the refactor changed user-visible behaviour.
+    #[test]
+    fn kiyo_pro_sees_exactly_what_it_saw_before() {
+        const BEFORE: &[&str] = &[
+            "brightness", "contrast", "saturation", "sharpness", "gamma", "gain",
+            "hue", "backlight_compensation", "power_line_frequency",
+            "white_balance_auto", "white_balance",
+            "auto_exposure", "exposure_time", "focus_auto", "focus", "zoom",
+            "hdr", "hdr_mode", "fov", "af_mode",
+        ];
+        let got: Vec<&str> = effective_controls(Some(&crate::models::razer_kiyo_pro::MODEL))
+            .iter()
+            .map(|c| c.name)
+            .collect();
+        assert_eq!(got, BEFORE);
+    }
+
+    #[test]
+    fn a_camera_with_no_model_sees_only_standard_controls() {
+        let got: Vec<&str> = effective_controls(None).iter().map(|c| c.name).collect();
+        let want: Vec<&str> = STANDARD.iter().map(|c| c.name).collect();
+        assert_eq!(got, want);
+        assert!(!got.contains(&"hdr"));
+    }
+
+    #[test]
+    fn every_includes_controls_from_models_that_are_not_attached() {
+        let names: Vec<&str> = every().iter().map(|c| c.name).collect();
+        assert!(names.contains(&"hdr"), "every() must list every registered Model's controls");
+        assert!(names.contains(&"brightness"));
+    }
+
+    #[test]
+    fn find_any_finds_model_controls_with_no_camera_open() {
+        assert!(find_any("hdr").is_some());
+        assert!(find_any("brightness").is_some());
+        assert!(find_any("no_such_control").is_none());
+    }
+
+    #[test]
+    fn is_model_control_distinguishes_the_two_catalogues() {
+        assert!(is_model_control("hdr"));
+        assert!(!is_model_control("brightness"));
+        assert!(!is_model_control("no_such_control"));
     }
 }

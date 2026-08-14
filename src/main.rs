@@ -308,7 +308,7 @@ fn cmd_show(dev: Option<&str>) -> Result<(), String> {
 }
 
 fn cmd_get(dev: Option<&str>, name: &str) -> Result<(), String> {
-    let ctrl = controls::find(name).ok_or_else(|| unknown_control(name))?;
+    let ctrl = controls::find_any(name).ok_or_else(|| unknown_control(name))?;
     if ctrl.is_opaque() {
         return Err(format!(
             "{name} is write-only; the camera cannot report it. Its last value is in the profile — see `kiyoctl profiles`."
@@ -331,7 +331,7 @@ fn cmd_set(dev: Option<&str>, profile_name: &str, args: &[String], no_remember: 
 
     let mut touched_razer = false;
     for (name, value) in &pairs {
-        let ctrl = controls::find(name).ok_or_else(|| unknown_control(name))?;
+        let ctrl = controls::find_any(name).ok_or_else(|| unknown_control(name))?;
         if ctrl.is_opaque() && !cam.has_razer_unit() {
             return Err(format!("{} has no Razer extension unit, so {name} is unavailable", cam.name));
         }
